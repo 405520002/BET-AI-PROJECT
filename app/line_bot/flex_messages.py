@@ -729,11 +729,9 @@ def build_recent_results(games: list[dict]) -> dict:
         status = g.get("status", "")
 
         if status == "postponed":
-            score_text = "延賽"
-            score_color = "#F39C12"
+            is_postponed = True
         else:
-            score_text = f"{away_score}  :  {home_score}"
-            score_color = "#FFFFFF"
+            is_postponed = False
 
         # Determine winner
         away_color = "#27AE60" if away_score > home_score else "#CCCCCC"
@@ -800,18 +798,37 @@ def build_recent_results(games: list[dict]) -> dict:
                             # Score
                             {
                                 "type": "box",
-                                "layout": "vertical",
-                                "flex": 2,
+                                "layout": "horizontal",
+                                "flex": 3,
                                 "justifyContent": "center",
                                 "alignItems": "center",
+                                "spacing": "sm",
                                 "contents": [
                                     {
                                         "type": "text",
-                                        "text": score_text,
-                                        "color": score_color,
+                                        "text": "延賽" if is_postponed else str(away_score),
+                                        "color": "#F39C12" if is_postponed else away_color,
                                         "weight": "bold",
-                                        "size": "xl",
+                                        "size": "xxl" if not is_postponed else "md",
                                         "align": "center",
+                                        "flex": 2,
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": "" if is_postponed else ":",
+                                        "color": "#888888",
+                                        "size": "md",
+                                        "align": "center",
+                                        "flex": 1,
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": "" if is_postponed else str(home_score),
+                                        "color": "#F39C12" if is_postponed else home_color,
+                                        "weight": "bold",
+                                        "size": "xxl" if not is_postponed else "md",
+                                        "align": "center",
+                                        "flex": 2,
                                     },
                                 ],
                             },

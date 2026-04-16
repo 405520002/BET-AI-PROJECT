@@ -278,16 +278,26 @@ def _get_standings_cached() -> dict:
             and (now - _standings_cache["updated_at"]).seconds < 1800):
         return _standings_cache["data"]
 
-    from app.scraper.cpbl_standings import _default_standings
+    from app.scraper.cpbl_standings import _parse_standings_html, _default_standings
     from app.db.client import get_db
     try:
-        # Try to get standings from DB first (stored by cron)
+        # Try DB cache first
         db = get_db()
         cached = db["cache"].find_one({"_id": "standings"})
         if cached and cached.get("data"):
             standings = cached["data"]
         else:
-            standings = _default_standings()
+            # Fallback: scrape synchronously
+            import httpx
+            from app.scraper.http_client import _browser_headers
+            r = httpx.get("https://en.cpbl.com.tw/standings/season",
+                         headers=_browser_headers("https://en.cpbl.com.tw/"),
+                         follow_redirects=True, timeout=15)
+            if r.status_code == 200:
+                standings = _parse_standings_html(r.text)
+                db["cache"].update_one({"_id": "standings"}, {"$set": {"data": standings}}, upsert=True)
+            else:
+                standings = _default_standings()
     except Exception:
         standings = _default_standings()
 
@@ -306,16 +316,20 @@ def _handle_standings(event):
 
 
 def _handle_recent_results(event):
-    """Show recent game results from MongoDB (stored by cron jobs)."""
+    """Show recent 3 days game results from MongoDB."""
     from app.db.client import get_db
+    from datetime import date, timedelta
     db = get_db()
 
-    # Get recent finished games from DB, sorted by date desc
+    three_days_ago = (date.today() - timedelta(days=3)).isoformat()
+
     recent = list(
         db["games"]
-        .find({"status": {"$in": ["final", "postponed"]}})
+        .find({
+            "status": {"$in": ["final", "postponed"]},
+            "date": {"$gte": three_days_ago},
+        })
         .sort("date", -1)
-        .limit(10)
     )
 
     if not recent:
