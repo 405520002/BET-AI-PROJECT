@@ -1,8 +1,9 @@
-"""Odds engine: uses OpenRouter (DeepSeek R1) to generate dynamic betting markets."""
+"""Odds engine: uses OpenRouter LLM to generate dynamic betting markets."""
 from __future__ import annotations
 
 import json
 import logging
+import time
 
 from openai import OpenAI
 
@@ -11,6 +12,15 @@ from app.betting.odds_prompt import build_odds_prompt
 from app.betting.odds_fallback import generate_fallback_odds
 
 logger = logging.getLogger(__name__)
+
+MAX_RETRIES = 6
+
+# Models to try in order (rotate on failure)
+MODELS = [
+    "nvidia/nemotron-3-super-120b-a12b:free",
+    "deepseek/deepseek-chat-v3-0324:free",
+    "google/gemini-2.0-flash-exp:free",
+]
 
 
 def _get_client() -> OpenAI:
@@ -27,53 +37,90 @@ def generate_odds_for_games(games: list[dict], standings: dict) -> dict[str, dic
     try:
         return _generate_with_llm(games, standings)
     except Exception as e:
-        logger.error(f"OpenRouter API failed, falling back to rule-based: {e}")
+        logger.error(f"All LLM attempts failed, falling back to rule-based: {e}")
         return _generate_with_fallback(games, standings)
+
+
+def _parse_json_response(response_text: str) -> list[dict]:
+    """Extract and parse JSON from LLM response. Raises on failure."""
+    text = response_text.strip()
+
+    # Remove thinking tags (DeepSeek R1)
+    if "<think>" in text:
+        think_end = text.rfind("</think>")
+        if think_end != -1:
+            text = text[think_end + 8:].strip()
+
+    # Extract from code blocks
+    if "```json" in text:
+        text = text.split("```json")[1].split("```")[0].strip()
+    elif "```" in text:
+        text = text.split("```")[1].split("```")[0].strip()
+
+    # Try to find JSON array if there's garbage before/after
+    start = text.find("[")
+    end = text.rfind("]")
+    if start != -1 and end != -1:
+        text = text[start:end + 1]
+
+    return json.loads(text)
 
 
 def _generate_with_llm(games: list[dict], standings: dict) -> dict[str, dict]:
     system_prompt, user_prompt = build_odds_prompt(games, standings)
-
     client = _get_client()
 
-    response = client.chat.completions.create(
-        model="nvidia/nemotron-3-super-120b-a12b:free",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        temperature=0.7,
-        max_tokens=4096,
-    )
+    last_error = None
+    for attempt in range(MAX_RETRIES):
+        model = MODELS[attempt % len(MODELS)]
+        try:
+            logger.info(f"LLM attempt {attempt + 1}/{MAX_RETRIES} with {model}")
 
-    response_text = response.choices[0].message.content.strip()
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=0.6,
+                max_tokens=4096,
+            )
 
-    # Extract JSON from response
-    if "```json" in response_text:
-        response_text = response_text.split("```json")[1].split("```")[0].strip()
-    elif "```" in response_text:
-        response_text = response_text.split("```")[1].split("```")[0].strip()
+            response_text = response.choices[0].message.content or ""
+            odds_list = _parse_json_response(response_text)
 
-    odds_list = json.loads(response_text)
+            # Validate structure
+            if not isinstance(odds_list, list) or len(odds_list) == 0:
+                raise ValueError("Empty or invalid response")
 
-    # Validate and build result
-    result = {}
-    for game_odds in odds_list:
-        game_id = game_odds.get("game_id", "")
-        markets = game_odds.get("markets", [])
+            # Build result
+            result = {}
+            for game_odds in odds_list:
+                game_id = game_odds.get("game_id", "")
+                markets = game_odds.get("markets", [])
+                validated_markets = _validate_markets(markets)
+                if validated_markets:
+                    result[game_id] = {"markets": validated_markets}
 
-        validated_markets = _validate_markets(markets)
-        if validated_markets:
-            result[game_id] = {"markets": validated_markets}
+            if not result:
+                raise ValueError("No valid markets generated")
 
-    # Fallback for missing games
-    for game in games:
-        gid = game.get("id", "")
-        if gid not in result:
-            logger.warning(f"No LLM odds for game {gid}, using fallback")
-            result[gid] = generate_fallback_odds(game, standings)
+            # Fallback for missing games
+            for game in games:
+                gid = game.get("id", "")
+                if gid not in result:
+                    logger.warning(f"No LLM odds for game {gid}, using fallback")
+                    result[gid] = generate_fallback_odds(game, standings)
 
-    return result
+            logger.info(f"LLM success on attempt {attempt + 1} with {model}")
+            return result
+
+        except Exception as e:
+            last_error = e
+            logger.warning(f"LLM attempt {attempt + 1} failed ({model}): {e}")
+            time.sleep(1)
+
+    raise RuntimeError(f"All {MAX_RETRIES} LLM attempts failed. Last error: {last_error}")
 
 
 def _generate_with_fallback(games: list[dict], standings: dict) -> dict[str, dict]:
@@ -86,7 +133,6 @@ def _generate_with_fallback(games: list[dict], standings: dict) -> dict[str, dic
 
 def _validate_markets(markets: list[dict]) -> list[dict]:
     validated = []
-
     for market in markets:
         options = market.get("options", [])
         if len(options) < 2:
@@ -95,12 +141,17 @@ def _validate_markets(markets: list[dict]) -> list[dict]:
         valid_options = []
         for opt in options:
             odds = opt.get("odds", 0)
+            if not isinstance(odds, (int, float)) or odds <= 0:
+                continue
             if odds < settings.min_odds:
                 odds = settings.min_odds
             elif odds > settings.max_odds:
                 odds = settings.max_odds
             opt["odds"] = round(odds, 2)
             valid_options.append(opt)
+
+        if len(valid_options) < 2:
+            continue
 
         implied_sum = sum(1.0 / opt["odds"] for opt in valid_options)
         if implied_sum < 1.02:

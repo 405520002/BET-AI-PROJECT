@@ -36,7 +36,11 @@ Your task: Given game data and team stats, design betting markets with odds for 
 - Odds must reasonably reflect the data
 - Custom markets must have a data-driven rationale in the description
 - Each market needs 2-4 options
-- Output ONLY valid JSON, no other text
+- Output ONLY a valid JSON array, no markdown, no explanation, no extra text
+- Do NOT use trailing commas in JSON
+- Do NOT use single quotes, only double quotes
+- Make sure all strings are properly closed
+- Keep descriptions short (under 50 characters) to avoid JSON encoding issues
 """
 
 USER_PROMPT_TEMPLATE = """Here are today's CPBL games. Generate betting markets and odds for each game.
@@ -89,7 +93,7 @@ USER_PROMPT_TEMPLATE = """Here are today's CPBL games. Generate betting markets 
 ]
 ```
 
-Return ONLY the JSON array. No other text.
+IMPORTANT: Return ONLY a raw JSON array. No markdown code blocks, no explanation. Start with [ and end with ].
 """
 
 
