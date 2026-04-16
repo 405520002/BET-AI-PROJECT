@@ -202,13 +202,18 @@ def handle_postback(event: PostbackEvent):
 def _handle_games(event, user_id: str):
     from datetime import date
     today = date.today().isoformat()
-    games = game_repo.get_games_by_date(today)
+    all_games = game_repo.get_games_by_date(today)
+    # Only show games that are still open for betting
+    open_games = [g for g in all_games if g.get("status") == "scheduled"]
 
-    if not games:
-        _reply(event.reply_token, ["今日沒有賽事，明天再來！"])
+    if not open_games:
+        if all_games:
+            _reply(event.reply_token, ["今日賽事已全部開始或結束，無法下注。"])
+        else:
+            _reply(event.reply_token, ["今日沒有賽事，明天再來！"])
         return
 
-    carousel = flex_messages.build_games_carousel(games)
+    carousel = flex_messages.build_games_carousel(open_games)
     _reply(event.reply_token, [carousel])
 
 
