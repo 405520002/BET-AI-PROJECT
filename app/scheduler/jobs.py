@@ -35,26 +35,34 @@ async def morning_job():
     # Clean up old data
     _cleanup_old_data()
 
-    # Scrape standings + schedule
+    # Scrape standings + this month's full schedule (for recent results + today's games)
     standings = await cpbl_standings.scrape_standings()
-    games = await cpbl_schedule.scrape_today_schedule()
-    scheduled = [g for g in games if g.get("status") == "scheduled"]
-    logger.info(f"[08:00] {len(scheduled)} scheduled games")
+
+    today_obj = date.today()
+    all_month_games = await cpbl_schedule.scrape_schedule_for_date(today_obj.year, today_obj.month)
+
+    # Store finished games (for "近期賽果" feature)
+    finished = [g for g in all_month_games if g.get("status") == "final" or g.get("status") == "postponed"]
+    for game in finished:
+        game_repo.upsert_game(game["id"], game)
+    logger.info(f"[08:00] Stored {len(finished)} finished games for recent results")
+
+    # Store today's scheduled games with AI odds
+    scheduled = [g for g in all_month_games if g.get("status") == "scheduled" and g.get("date") == today_str]
+    logger.info(f"[08:00] {len(scheduled)} scheduled games today")
 
     if not scheduled:
-        return {"games": 0}
+        return {"games": 0, "finished_stored": len(finished)}
 
-    # AI generate odds
     odds_map = generate_odds_for_games(scheduled, standings)
 
-    # Store games with odds
     for game in scheduled:
         gid = game.get("id", "")
         game["odds"] = odds_map.get(gid, {"markets": []})
         game_repo.upsert_game(gid, game)
         logger.info(f"[08:00] {game.get('away_team_name','')} vs {game.get('home_team_name','')}: {len(game['odds'].get('markets',[]))} markets")
 
-    return {"games": len(scheduled)}
+    return {"games": len(scheduled), "finished_stored": len(finished)}
 
 
 async def midday_update():
