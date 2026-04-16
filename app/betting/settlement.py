@@ -9,7 +9,7 @@ from datetime import date
 from openai import OpenAI
 
 from app.config import settings
-from app.firebase import game_repo, bet_repo, user_repo, tx_repo
+from app.db import game_repo, bet_repo, user_repo, tx_repo
 
 logger = logging.getLogger(__name__)
 

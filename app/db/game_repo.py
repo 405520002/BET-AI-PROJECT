@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from app.firebase.client import get_db
+from app.db.client import get_db
 
 
 COLLECTION = "games"

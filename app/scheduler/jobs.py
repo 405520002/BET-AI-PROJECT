@@ -5,7 +5,7 @@ from datetime import date, timedelta
 from app.scraper import cpbl_schedule, cpbl_results, cpbl_standings
 from app.betting.odds_engine import generate_odds_for_games
 from app.betting.settlement import settle_all_games_for_date
-from app.firebase import game_repo
+from app.db import game_repo
 
 logger = logging.getLogger(__name__)
 

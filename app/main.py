@@ -121,7 +121,7 @@ if settings.env == "development":
     @app.post("/dev/create-test-games")
     async def create_test_games():
         """Create test games with AI-generated odds."""
-        from app.firebase import game_repo
+        from app.db import game_repo
         from app.betting.odds_engine import generate_odds_for_games
 
         today = date.today().isoformat()
@@ -198,7 +198,7 @@ if settings.env == "development":
     @app.post("/dev/settle-test-game")
     async def settle_test_game(home_score: int = 3, away_score: int = 5):
         """Manually settle the test game."""
-        from app.firebase import game_repo
+        from app.db import game_repo
         from app.betting.settlement import settle_game
 
         today = date.today().isoformat()

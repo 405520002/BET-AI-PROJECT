@@ -21,7 +21,7 @@ from linebot.v3.webhooks import (
 )
 
 from app.config import settings
-from app.firebase import user_repo, game_repo, bet_repo
+from app.db import user_repo, game_repo, bet_repo
 from app.betting import bet_service
 from app.line_bot.commands import parse_text_command, parse_postback
 from app.line_bot import flex_messages

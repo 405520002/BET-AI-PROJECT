@@ -2,7 +2,7 @@
 from datetime import date, datetime
 
 from app.config import settings
-from app.firebase import user_repo, game_repo, bet_repo, tx_repo
+from app.db import user_repo, game_repo, bet_repo, tx_repo
 
 
 def deposit(user_id: str, amount: int) -> dict:
