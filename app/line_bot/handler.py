@@ -159,6 +159,8 @@ def handle_text_message(event: MessageEvent):
         _handle_standings(event)
     elif cmd == "recent_results":
         _handle_recent_results(event)
+    elif cmd == "upcoming":
+        _handle_upcoming(event)
     elif cmd == "help":
         _handle_help(event)
     else:
@@ -326,6 +328,28 @@ def _handle_standings(event):
         _reply(event.reply_token, [flex_messages.build_error_message("無法取得戰績資料")])
         return
     msg = flex_messages.build_standings(standings)
+    _reply(event.reply_token, [msg])
+
+
+def _handle_upcoming(event):
+    """Show upcoming 7-day schedule from DB cache."""
+    from app.db.client import get_db
+    from datetime import date, timedelta
+
+    db = get_db()
+    cached = db["cache"].find_one({"_id": "upcoming_schedule"})
+
+    if cached and cached.get("data"):
+        games_by_date = cached["data"]
+    else:
+        _reply(event.reply_token, [flex_messages.build_error_message("尚未載入賽程，請等待每日排程更新。")])
+        return
+
+    if not games_by_date:
+        _reply(event.reply_token, ["未來七天沒有賽事"])
+        return
+
+    msg = flex_messages.build_upcoming_schedule(games_by_date)
     _reply(event.reply_token, [msg])
 
 

@@ -909,6 +909,109 @@ def build_recent_results(games: list[dict]) -> dict:
     }
 
 
+def build_upcoming_schedule(games_by_date: dict[str, list[dict]]) -> dict:
+    """Build upcoming 7-day schedule as carousel, one bubble per date."""
+    WEEKDAY_ZH = ["一", "二", "三", "四", "五", "六", "日"]
+    bubbles = []
+
+    for date_str, games in sorted(games_by_date.items()):
+        # Parse weekday
+        from datetime import date as date_cls
+        parts = date_str.split("-")
+        d = date_cls(int(parts[0]), int(parts[1]), int(parts[2]))
+        weekday = WEEKDAY_ZH[d.weekday()]
+
+        game_rows = []
+        for g in games:
+            away = g.get("away_team_name", "")
+            home = g.get("home_team_name", "")
+            venue = g.get("venue", "")
+            game_time = g.get("game_time", "")
+
+            game_rows.append({
+                "type": "box",
+                "layout": "horizontal",
+                "margin": "lg",
+                "contents": [
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "flex": 5,
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": f"{away}  vs  {home}",
+                                "size": "sm",
+                                "weight": "bold",
+                                "color": "#333333",
+                            },
+                            {
+                                "type": "text",
+                                "text": f"{venue}  {game_time}",
+                                "size": "xs",
+                                "color": "#888888",
+                                "margin": "xs",
+                            },
+                        ],
+                    },
+                ],
+            })
+
+            # Separator between games
+            if g != games[-1]:
+                game_rows.append({"type": "separator", "margin": "lg"})
+
+        bubble = {
+            "type": "bubble",
+            "size": "kilo",
+            "header": {
+                "type": "box",
+                "layout": "vertical",
+                "backgroundColor": "#1B2838",
+                "paddingAll": "12px",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": f"{date_str} (週{weekday})",
+                        "color": "#FFFFFF",
+                        "weight": "bold",
+                        "size": "md",
+                        "align": "center",
+                    },
+                    {
+                        "type": "text",
+                        "text": f"{len(games)} 場比賽",
+                        "color": "#AAAAAA",
+                        "size": "xs",
+                        "align": "center",
+                        "margin": "xs",
+                    },
+                ],
+            },
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "paddingAll": "12px",
+                "contents": game_rows if game_rows else [
+                    {"type": "text", "text": "無賽事", "color": "#888888", "size": "sm", "align": "center"}
+                ],
+            },
+        }
+        bubbles.append(bubble)
+
+    if not bubbles:
+        return {"type": "text", "text": "未來七天沒有賽事"}
+
+    return {
+        "type": "flex",
+        "altText": "未來七天賽事",
+        "contents": {
+            "type": "carousel",
+            "contents": bubbles[:10],
+        },
+    }
+
+
 def build_success_message(text: str) -> dict:
     """Simple success text message."""
     return {"type": "text", "text": f"✅ {text}"}

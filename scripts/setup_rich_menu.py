@@ -25,8 +25,8 @@ from linebot.v3.messaging import (
 from app.config import settings
 
 WIDTH = 2500
-HEIGHT = 843
-COLS = 3
+HEIGHT = 1686
+COLS = 4
 ROWS = 2
 CELL_W = WIDTH // COLS
 CELL_H = HEIGHT // ROWS
@@ -38,12 +38,14 @@ MENU_ITEMS = [
     ("排行榜",   "排行榜",   "#8E44AD"),
     ("球隊戰績", "球隊戰績",  "#1A5276"),
     ("我的注單", "我的注單",  "#2471A3"),
+    ("我的戰績", "我的戰績",  "#1E8449"),
+    ("未來賽事", "未來賽事",  "#616A6B"),
 ]
 
 
 def _draw_baseball(draw, cx, cy, r):
     """Draw a baseball icon."""
-    draw.ellipse([cx - r, cy - r, cx + r, cy + r], outline="white", width=4)
+    draw.ellipse([cx - r, cy - r, cx + r, cy + r], outline="white", width=5)
     # Stitching lines
     for angle_offset in [-30, 30]:
         points = []
@@ -53,48 +55,44 @@ def _draw_baseball(draw, cx, cy, r):
             y = cy + r * math.sin(rad)
             points.append((x, y))
         if len(points) > 1:
-            draw.line(points, fill="white", width=3)
+            draw.line(points, fill="white", width=4)
 
 
 def _draw_ticket(draw, cx, cy, r):
     """Draw a ticket/document icon."""
     x0, y0 = cx - r * 0.7, cy - r
     x1, y1 = cx + r * 0.7, cy + r
-    draw.rounded_rectangle([x0, y0, x1, y1], radius=10, outline="white", width=4)
-    # Lines on ticket
+    draw.rounded_rectangle([x0, y0, x1, y1], radius=12, outline="white", width=5)
     for i in range(3):
         ly = y0 + (y1 - y0) * (0.3 + i * 0.2)
-        draw.line([x0 + 15, ly, x1 - 15, ly], fill="white", width=3)
-    # Tear line
+        draw.line([x0 + 20, ly, x1 - 20, ly], fill="white", width=4)
     ty = y0 + (y1 - y0) * 0.2
-    for dx in range(int(x0 + 5), int(x1 - 5), 12):
-        draw.line([dx, ty, dx + 5, ty], fill="white", width=2)
+    for dx in range(int(x0 + 5), int(x1 - 5), 14):
+        draw.line([dx, ty, dx + 6, ty], fill="white", width=3)
 
 
 def _draw_coin(draw, cx, cy, r):
     """Draw a coin/money icon."""
-    draw.ellipse([cx - r, cy - r, cx + r, cy + r], outline="white", width=4)
-    draw.ellipse([cx - r + 8, cy - r + 8, cx + r - 8, cy + r - 8], outline="white", width=2)
-    # Dollar sign
-    draw.text((cx - 10, cy - 22), "$", fill="white",
-              font=ImageFont.truetype("/System/Library/Fonts/STHeiti Medium.ttc", 44))
+    draw.ellipse([cx - r, cy - r, cx + r, cy + r], outline="white", width=5)
+    draw.ellipse([cx - r + 10, cy - r + 10, cx + r - 10, cy + r - 10], outline="white", width=3)
+    dollar_font = ImageFont.truetype("/System/Library/Fonts/STHeiti Medium.ttc", int(r * 1.0))
+    bbox = draw.textbbox((0, 0), "$", font=dollar_font)
+    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    draw.text((cx - tw // 2, cy - th // 2), "$", fill="white", font=dollar_font)
 
 
 def _draw_trophy(draw, cx, cy, r):
     """Draw a trophy icon."""
-    # Cup body
     draw.rounded_rectangle([cx - r * 0.5, cy - r * 0.8, cx + r * 0.5, cy + r * 0.2],
-                           radius=8, outline="white", width=4)
-    # Handles
+                           radius=10, outline="white", width=5)
     draw.arc([cx - r * 0.9, cy - r * 0.6, cx - r * 0.3, cy + r * 0.1],
-             start=90, end=270, fill="white", width=4)
+             start=90, end=270, fill="white", width=5)
     draw.arc([cx + r * 0.3, cy - r * 0.6, cx + r * 0.9, cy + r * 0.1],
-             start=-90, end=90, fill="white", width=4)
-    # Base
-    draw.line([cx, cy + r * 0.2, cx, cy + r * 0.6], fill="white", width=4)
-    draw.line([cx - r * 0.4, cy + r * 0.6, cx + r * 0.4, cy + r * 0.6], fill="white", width=4)
+             start=-90, end=90, fill="white", width=5)
+    draw.line([cx, cy + r * 0.2, cx, cy + r * 0.6], fill="white", width=5)
+    draw.line([cx - r * 0.4, cy + r * 0.6, cx + r * 0.4, cy + r * 0.6], fill="white", width=5)
     draw.rounded_rectangle([cx - r * 0.5, cy + r * 0.6, cx + r * 0.5, cy + r * 0.85],
-                           radius=5, outline="white", width=3)
+                           radius=6, outline="white", width=4)
 
 
 def _draw_chart(draw, cx, cy, r):
@@ -108,23 +106,21 @@ def _draw_chart(draw, cx, cy, r):
     for i, h in enumerate(heights):
         x0 = start_x + i * (bar_w + gap)
         y0 = base_y - r * 1.6 * h
-        draw.rounded_rectangle([x0, y0, x0 + bar_w, base_y], radius=5, outline="white", width=3, fill=None)
-    # Baseline
-    draw.line([start_x - 5, base_y + 3, start_x + len(heights) * (bar_w + gap), base_y + 3],
-              fill="white", width=3)
+        draw.rounded_rectangle([x0, y0, x0 + bar_w, base_y], radius=6, outline="white", width=4, fill=None)
+    draw.line([start_x - 5, base_y + 4, start_x + len(heights) * (bar_w + gap), base_y + 4],
+              fill="white", width=4)
 
 
 def _draw_scoreboard(draw, cx, cy, r):
     """Draw a scoreboard icon for recent results."""
-    # Scoreboard frame
-    draw.rounded_rectangle([cx - r * 0.8, cy - r * 0.6, cx + r * 0.8, cy + r * 0.6],
-                           radius=8, outline="white", width=3)
-    # Score divider
-    draw.line([cx, cy - r * 0.6, cx, cy + r * 0.6], fill="white", width=2)
-    # Scores
-    font = ImageFont.truetype("/System/Library/Fonts/STHeiti Medium.ttc", int(r * 0.7))
-    draw.text((cx - r * 0.5, cy - r * 0.3), "3", fill="white", font=font)
-    draw.text((cx + r * 0.2, cy - r * 0.3), "5", fill="white", font=font)
+    draw.rounded_rectangle([cx - r * 0.85, cy - r * 0.65, cx + r * 0.85, cy + r * 0.65],
+                           radius=10, outline="white", width=5)
+    draw.line([cx, cy - r * 0.65, cx, cy + r * 0.65], fill="white", width=3)
+    score_font = ImageFont.truetype("/System/Library/Fonts/STHeiti Medium.ttc", int(r * 0.8))
+    bbox3 = draw.textbbox((0, 0), "3", font=score_font)
+    bbox5 = draw.textbbox((0, 0), "5", font=score_font)
+    draw.text((cx - r * 0.42 - (bbox3[2] - bbox3[0]) // 2, cy - (bbox3[3] - bbox3[1]) // 2), "3", fill="white", font=score_font)
+    draw.text((cx + r * 0.42 - (bbox5[2] - bbox5[0]) // 2, cy - (bbox5[3] - bbox5[1]) // 2), "5", fill="white", font=score_font)
 
 
 def _draw_standings(draw, cx, cy, r):
@@ -133,9 +129,40 @@ def _draw_standings(draw, cx, cy, r):
         y = cy + r * y_off
         x0 = cx - r * w_ratio / 2
         x1 = cx + r * w_ratio / 2
-        draw.rounded_rectangle([x0, y - 8, x1, y + 8], radius=5, outline="white", width=3)
-        draw.ellipse([x0 - 15, y - 10, x0 + 5, y + 10], fill="white")
+        draw.rounded_rectangle([x0, y - 12, x1, y + 12], radius=6, outline="white", width=4)
+        draw.ellipse([x0 - 20, y - 14, x0 + 8, y + 14], fill="white")
 
+
+
+def _draw_stats(draw, cx, cy, r):
+    """Draw a stats/chart icon for 我的戰績."""
+    # Pie chart
+    draw.arc([cx - r * 0.8, cy - r * 0.8, cx + r * 0.8, cy + r * 0.8],
+             start=0, end=360, fill="white", width=5)
+    # Slice line
+    draw.line([cx, cy, cx + r * 0.8, cy], fill="white", width=4)
+    draw.line([cx, cy, cx, cy - r * 0.8], fill="white", width=4)
+    # Filled slice
+    draw.pieslice([cx - r * 0.75, cy - r * 0.75, cx + r * 0.75, cy + r * 0.75],
+                  start=270, end=360, fill="white", outline="white")
+
+
+def _draw_calendar(draw, cx, cy, r):
+    """Draw a calendar icon for 未來賽事."""
+    # Calendar body
+    draw.rounded_rectangle([cx - r * 0.8, cy - r * 0.6, cx + r * 0.8, cy + r * 0.8],
+                           radius=8, outline="white", width=5)
+    # Top bar
+    draw.rectangle([cx - r * 0.8, cy - r * 0.6, cx + r * 0.8, cy - r * 0.2], fill="white")
+    # Hooks
+    draw.line([cx - r * 0.4, cy - r * 0.8, cx - r * 0.4, cy - r * 0.4], fill="white", width=5)
+    draw.line([cx + r * 0.4, cy - r * 0.8, cx + r * 0.4, cy - r * 0.4], fill="white", width=5)
+    # Grid dots
+    for row in range(2):
+        for col in range(3):
+            dx = cx - r * 0.4 + col * r * 0.4
+            dy = cy + r * 0.05 + row * r * 0.35
+            draw.ellipse([dx - 5, dy - 5, dx + 5, dy + 5], fill="white")
 
 
 ICON_DRAWERS = [
@@ -145,6 +172,8 @@ ICON_DRAWERS = [
     _draw_trophy,       # 排行榜
     _draw_standings,    # 球隊戰績
     _draw_ticket,       # 我的注單
+    _draw_stats,        # 我的戰績
+    _draw_calendar,     # 未來賽事
 ]
 
 
@@ -152,7 +181,7 @@ def create_rich_menu_image() -> str:
     img = Image.new("RGB", (WIDTH, HEIGHT), "#1B2838")
     draw = ImageDraw.Draw(img)
 
-    font_size = 46
+    font_size = 72
     font = ImageFont.load_default()
     for fp in [
         "/System/Library/Fonts/STHeiti Medium.ttc",
@@ -175,15 +204,15 @@ def create_rich_menu_image() -> str:
         cx = x0 + CELL_W // 2
         cy = y0 + CELL_H // 2
 
-        # Cell background with slight gradient effect (darker at top)
-        draw.rounded_rectangle([x0 + 4, y0 + 4, x1 - 4, y1 - 4], radius=15, fill=color)
+        # Cell background
+        draw.rounded_rectangle([x0 + 6, y0 + 6, x1 - 6, y1 - 6], radius=20, fill=color)
 
-        # Draw icon (above center)
-        icon_cy = cy - 50
-        ICON_DRAWERS[i](draw, cx, icon_cy, 50)
+        # Draw icon (bigger, above center)
+        icon_cy = cy - 80
+        ICON_DRAWERS[i](draw, cx, icon_cy, 85)
 
-        # Draw text (below icon)
-        text_y = cy + 30
+        # Draw text (bigger, below icon)
+        text_y = cy + 50
         bbox = draw.textbbox((0, 0), label, font=font)
         tw = bbox[2] - bbox[0]
         draw.text((cx - tw // 2, text_y), label, fill="#FFFFFF", font=font)

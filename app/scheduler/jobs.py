@@ -60,17 +60,44 @@ async def morning_job():
         upsert=True,
     )
 
-    # Scrape this month's schedule
-    all_month_games = await cpbl_schedule.scrape_schedule_for_date(today_obj.year, today_obj.month)
+    # Scrape this month's schedule (and next month if near end of month)
+    import time, random
+    all_games = []
+    all_games += await cpbl_schedule.scrape_schedule_for_date(today_obj.year, today_obj.month)
+    if today_obj.day >= 25:
+        time.sleep(random.uniform(1, 2))
+        next_month = today_obj.replace(day=28) + timedelta(days=4)
+        all_games += await cpbl_schedule.scrape_schedule_for_date(next_month.year, next_month.month)
 
     # Store finished games
-    finished = [g for g in all_month_games if g.get("status") in ("final", "postponed")]
+    finished = [g for g in all_games if g.get("status") in ("final", "postponed")]
     for game in finished:
         game_repo.upsert_game(game["id"], game)
     logger.info(f"[08:00] Stored {len(finished)} finished games")
 
+    # Cache upcoming 7-day schedule
+    seven_days_later = (today_obj + timedelta(days=7)).isoformat()
+    upcoming = [g for g in all_games if g.get("status") == "scheduled" and today_str <= g.get("date", "") <= seven_days_later]
+    games_by_date = {}
+    for g in upcoming:
+        d = g.get("date", "")
+        if d not in games_by_date:
+            games_by_date[d] = []
+        games_by_date[d].append({
+            "away_team_name": g.get("away_team_name", ""),
+            "home_team_name": g.get("home_team_name", ""),
+            "venue": g.get("venue", ""),
+            "game_time": g.get("game_time", ""),
+        })
+    db["cache"].update_one(
+        {"_id": "upcoming_schedule"},
+        {"$set": {"data": games_by_date, "updated_at": today_str}},
+        upsert=True,
+    )
+    logger.info(f"[08:00] Cached {len(upcoming)} upcoming games for {len(games_by_date)} days")
+
     # Store today's scheduled games with AI odds
-    scheduled = [g for g in all_month_games if g.get("status") == "scheduled" and g.get("date") == today_str]
+    scheduled = [g for g in all_games if g.get("status") == "scheduled" and g.get("date") == today_str]
     logger.info(f"[08:00] {len(scheduled)} scheduled games today")
 
     if not scheduled:
