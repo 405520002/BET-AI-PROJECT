@@ -6,16 +6,21 @@ from app.scraper import cpbl_schedule, cpbl_results, cpbl_standings
 from app.betting.odds_engine import generate_odds_for_games
 from app.betting.settlement import settle_all_games_for_date
 from app.db import game_repo
+from app.db.client import get_db
 
 logger = logging.getLogger(__name__)
 
 
 async def scrape_and_generate_odds():
-    """Morning job: scrape today's schedule, generate odds, store in Firebase.
+    """Morning job: scrape today's schedule, generate odds, store in MongoDB.
+    Also cleans up game/bet/tx data older than 30 days.
     Triggered at 08:00 or via /cron/scrape-schedule.
     """
     today = date.today().isoformat()
     logger.info(f"[CRON] Scraping schedule for {today}")
+
+    # 0. Clean up data older than 30 days
+    _cleanup_old_data()
 
     # 1. Scrape standings
     standings = await cpbl_standings.scrape_standings()
@@ -98,3 +103,22 @@ async def settle_today():
     result = settle_all_games_for_date(yesterday)
     logger.info(f"Settlement result: {result}")
     return result
+
+
+def _cleanup_old_data():
+    """Remove games, bets, and transactions older than 30 days."""
+    from datetime import datetime
+    cutoff = datetime.now() - timedelta(days=30)
+    cutoff_date_str = (date.today() - timedelta(days=30)).isoformat()
+    db = get_db()
+
+    # Games older than 30 days
+    r1 = db["games"].delete_many({"date": {"$lt": cutoff_date_str}})
+    # Bets older than 30 days
+    r2 = db["bets"].delete_many({"created_at": {"$lt": cutoff}})
+    # Transactions older than 30 days
+    r3 = db["transactions"].delete_many({"created_at": {"$lt": cutoff}})
+
+    total = r1.deleted_count + r2.deleted_count + r3.deleted_count
+    if total > 0:
+        logger.info(f"[CLEANUP] Deleted {r1.deleted_count} games, {r2.deleted_count} bets, {r3.deleted_count} transactions (older than 30 days)")
