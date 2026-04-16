@@ -18,25 +18,21 @@ logger = logging.getLogger(__name__)
 
 MAX_RETRIES = 3
 
-# Step 1: creative models (free, for designing markets)
+# Step 1: creative design (Trinity is best for creative Chinese output)
 DESIGN_MODELS = [
+    "arcee-ai/trinity-large-preview:free",
     "nvidia/nemotron-3-super-120b-a12b:free",
-    "google/gemma-3-27b-it:free",
-    "nvidia/nemotron-3-super-120b-a12b:free",
+    "arcee-ai/trinity-large-preview:free",
 ]
+
+# Step 2: JSON formatting (Nemotron is most accurate for JSON + correct team names)
+JSON_MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
 
 
 def _get_openrouter() -> OpenAI:
     return OpenAI(
         api_key=settings.openrouter_api_key,
         base_url="https://openrouter.ai/api/v1",
-    )
-
-
-def _get_groq() -> OpenAI:
-    return OpenAI(
-        api_key=settings.groq_api_key,
-        base_url="https://api.groq.com/openai/v1",
     )
 
 
@@ -52,7 +48,6 @@ def generate_odds_for_games(games: list[dict], standings: dict) -> dict[str, dic
 
 def _generate_two_step(games: list[dict], standings: dict) -> dict[str, dict]:
     """Step 1: AI designs markets in natural language. Step 2: AI converts to JSON."""
-    client = _get_client()
 
     # === Step 1: Design markets (OpenRouter free models) ===
     design_prompt = build_design_prompt(games, standings)
@@ -84,16 +79,16 @@ def _generate_two_step(games: list[dict], standings: dict) -> dict[str, dict]:
     if not design_text or len(design_text) < 100:
         raise RuntimeError("Step 1 (design) failed")
 
-    # === Step 2: Convert to JSON (Groq - fast & reliable) ===
+    # === Step 2: Convert to JSON (Nemotron - accurate team names + clean JSON) ===
     game_ids = [g.get("id", "") for g in games]
     json_prompt = build_json_prompt(design_text, game_ids)
-    groq = _get_groq()
+    openrouter = _get_openrouter()
 
     for attempt in range(MAX_RETRIES):
         try:
-            logger.info(f"Step 2 (JSON via Groq) attempt {attempt + 1}/{MAX_RETRIES}")
-            response = groq.chat.completions.create(
-                model="llama-3.3-70b-versatile",
+            logger.info(f"Step 2 (JSON) attempt {attempt + 1}/{MAX_RETRIES} with {JSON_MODEL}")
+            response = openrouter.chat.completions.create(
+                model=JSON_MODEL,
                 messages=[{"role": "user", "content": json_prompt}],
                 temperature=0,
                 max_tokens=4096,
@@ -131,7 +126,7 @@ def _generate_two_step(games: list[dict], standings: dict) -> dict[str, dict]:
             return result
 
         except Exception as e:
-            logger.warning(f"Step 2 (Groq) attempt {attempt + 1} failed: {e}")
+            logger.warning(f"Step 2 (JSON) attempt {attempt + 1} failed: {e}")
             time.sleep(1)
 
     raise RuntimeError("Step 2 (JSON via Groq) failed")
