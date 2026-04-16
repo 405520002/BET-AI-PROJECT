@@ -29,6 +29,30 @@ TEAM_CODE_MAP = {
     "AKP011": {"code": "AKP", "name": "台鋼雄鷹"},
 }
 
+# English name → Chinese name (for en.cpbl.com.tw)
+EN_TO_ZH = {
+    "Brothers": "中信兄弟",
+    "CTBC Brothers": "中信兄弟",
+    "U-Lions": "統一7-ELEVEn獅",
+    "Uni-Lions": "統一7-ELEVEn獅",
+    "Monkeys": "樂天桃猿",
+    "Rakuten Monkeys": "樂天桃猿",
+    "Guardians": "富邦悍將",
+    "Fubon Guardians": "富邦悍將",
+    "DRAGONS": "味全龍",
+    "Wei Chuan Dragons": "味全龍",
+    "Dragons": "味全龍",
+    "TSG Hawks": "台鋼雄鷹",
+    "Hawks": "台鋼雄鷹",
+}
+
+
+def _to_chinese_name(name: str) -> str:
+    """Convert English team name to Chinese if needed."""
+    if any('\u4e00' <= c <= '\u9fff' for c in name):
+        return name  # already Chinese
+    return EN_TO_ZH.get(name, name)
+
 
 async def _get_verification_token() -> str:
     """Get RequestVerificationToken from schedule page."""
@@ -129,9 +153,9 @@ def _parse_games(game_list: list[dict], year: int, month: int, day: int | None =
             "date": game_date,
             "game_sno": game_sno,
             "home_team": home_info["code"],
-            "home_team_name": g.get("HomeTeamName", home_info["name"]),
+            "home_team_name": _to_chinese_name(g.get("HomeTeamName", home_info["name"])),
             "away_team": away_info["code"],
-            "away_team_name": g.get("VisitingTeamName", away_info["name"]),
+            "away_team_name": _to_chinese_name(g.get("VisitingTeamName", away_info["name"])),
             "venue": g.get("FieldAbbe", ""),
             "game_time": game_time,
             "home_pitcher": g.get("HomePitcherName", "TBD"),

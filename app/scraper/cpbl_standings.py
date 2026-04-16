@@ -32,6 +32,20 @@ TEAM_NAME_NORMALIZE = {
     "味全": "AAA",
     "台鋼雄鷹": "AKP",
     "台鋼": "AKP",
+    # English names (en.cpbl.com.tw)
+    "Brothers": "ACN",
+    "CTBC Brothers": "ACN",
+    "U-Lions": "ADD",
+    "Uni-Lions": "ADD",
+    "Monkeys": "AJL",
+    "Rakuten Monkeys": "AJL",
+    "Guardians": "AEO",
+    "Fubon Guardians": "AEO",
+    "DRAGONS": "AAA",
+    "Dragons": "AAA",
+    "Wei Chuan Dragons": "AAA",
+    "TSG Hawks": "AKP",
+    "Hawks": "AKP",
 }
 
 TEAM_FULL_NAMES = {
