@@ -29,23 +29,45 @@ logger = logging.getLogger(__name__)
 
 async def morning_job():
     """08:00 - Scrape schedule + AI generate odds."""
-    today = date.today().isoformat()
-    logger.info(f"[08:00] Starting morning job for {today}")
+    today_obj = date.today()
+    today_str = today_obj.isoformat()
+    logger.info(f"[08:00] Starting morning job for {today_str}")
 
     # Clean up old data
     _cleanup_old_data()
 
-    # Scrape standings + this month's full schedule (for recent results + today's games)
+    db = get_db()
+
+    # Check if we have recent results in DB
+    recent_count = db["games"].count_documents({
+        "status": {"$in": ["final", "postponed"]},
+        "date": {"$gte": (today_obj - timedelta(days=10)).isoformat()},
+    })
+    logger.info(f"[08:00] Recent finished games in DB: {recent_count}")
+
+    # If less than 5 recent results, backfill from CPBL
+    if recent_count < 5:
+        logger.info("[08:00] Backfilling recent results...")
+        await _backfill_recent_results(today_obj)
+
+    # Scrape standings
     standings = await cpbl_standings.scrape_standings()
 
-    today_obj = date.today()
+    # Cache standings in DB for LINE bot
+    db["cache"].update_one(
+        {"_id": "standings"},
+        {"$set": {"data": standings, "updated_at": today_str}},
+        upsert=True,
+    )
+
+    # Scrape this month's schedule
     all_month_games = await cpbl_schedule.scrape_schedule_for_date(today_obj.year, today_obj.month)
 
-    # Store finished games (for "近期賽果" feature)
-    finished = [g for g in all_month_games if g.get("status") == "final" or g.get("status") == "postponed"]
+    # Store finished games
+    finished = [g for g in all_month_games if g.get("status") in ("final", "postponed")]
     for game in finished:
         game_repo.upsert_game(game["id"], game)
-    logger.info(f"[08:00] Stored {len(finished)} finished games for recent results")
+    logger.info(f"[08:00] Stored {len(finished)} finished games")
 
     # Store today's scheduled games with AI odds
     scheduled = [g for g in all_month_games if g.get("status") == "scheduled" and g.get("date") == today_str]
@@ -167,3 +189,35 @@ def _cleanup_old_data():
     total = r1.deleted_count + r2.deleted_count + r3.deleted_count
     if total > 0:
         logger.info(f"[CLEANUP] Deleted {r1.deleted_count} games, {r2.deleted_count} bets, {r3.deleted_count} tx")
+
+
+async def _backfill_recent_results(today_obj):
+    """Backfill recent finished games from CPBL when DB is empty/sparse.
+    Scrapes current month and previous month to get ~10 days of results.
+    """
+    import time
+    import random
+
+    stored = 0
+    months_to_scrape = [(today_obj.year, today_obj.month)]
+
+    # Also scrape previous month if we're early in the month
+    if today_obj.day <= 10:
+        prev = today_obj.replace(day=1) - timedelta(days=1)
+        months_to_scrape.append((prev.year, prev.month))
+
+    for year, month in months_to_scrape:
+        logger.info(f"[BACKFILL] Scraping {year}-{month:02d}")
+        try:
+            games = await cpbl_schedule.scrape_schedule_for_date(year, month)
+            finished = [g for g in games if g.get("status") in ("final", "postponed")]
+            for game in finished:
+                game_repo.upsert_game(game["id"], game)
+                stored += 1
+            logger.info(f"[BACKFILL] {year}-{month:02d}: {len(finished)} finished games stored")
+            # Random delay between months
+            time.sleep(random.uniform(1, 3))
+        except Exception as e:
+            logger.error(f"[BACKFILL] Failed for {year}-{month:02d}: {e}")
+
+    logger.info(f"[BACKFILL] Total stored: {stored} games")

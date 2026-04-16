@@ -60,15 +60,16 @@ TEAM_FULL_NAMES = {
 
 async def scrape_standings() -> dict:
     """Scrape current CPBL standings."""
+    from app.scraper.http_client import fetch_page
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.get(STANDINGS_URL, headers=HEADERS, follow_redirects=True)
-            resp.raise_for_status()
+        html = await fetch_page("https://en.cpbl.com.tw", "/standings/season")
+        if not html:
+            return _default_standings()
     except Exception as e:
         logger.error(f"Failed to fetch CPBL standings: {e}")
         return _default_standings()
 
-    standings = _parse_standings_html(resp.text)
+    standings = _parse_standings_html(html)
     if not standings:
         logger.warning("Could not parse standings, using defaults")
         return _default_standings()

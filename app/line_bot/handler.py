@@ -278,17 +278,16 @@ def _get_standings_cached() -> dict:
             and (now - _standings_cache["updated_at"]).seconds < 1800):
         return _standings_cache["data"]
 
-    import httpx
-    from app.scraper.cpbl_standings import _parse_standings_html, _default_standings
+    from app.scraper.cpbl_standings import _default_standings
+    from app.db.client import get_db
     try:
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
-            "Accept-Language": "zh-TW,zh;q=0.9",
-            "Referer": "https://en.cpbl.com.tw/",
-        }
-        r = httpx.get("https://en.cpbl.com.tw/standings/season", headers=headers, follow_redirects=True, timeout=15)
-        r.raise_for_status()
-        standings = _parse_standings_html(r.text)
+        # Try to get standings from DB first (stored by cron)
+        db = get_db()
+        cached = db["cache"].find_one({"_id": "standings"})
+        if cached and cached.get("data"):
+            standings = cached["data"]
+        else:
+            standings = _default_standings()
     except Exception:
         standings = _default_standings()
 

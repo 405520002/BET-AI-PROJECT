@@ -6,19 +6,11 @@ import logging
 import re
 from datetime import date
 
-import httpx
-
 logger = logging.getLogger(__name__)
 
-BASE_URL = "https://en.cpbl.com.tw"
-SCHEDULE_PAGE = f"{BASE_URL}/schedule"
-SCHEDULE_API = f"{BASE_URL}/schedule/getgamedatas"
+from app.scraper.http_client import fetch_api
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
-    "Accept-Language": "zh-TW,zh;q=0.9",
-    "Referer": f"{BASE_URL}/schedule",
-}
+BASE_URL = "https://en.cpbl.com.tw"
 
 TEAM_CODE_MAP = {
     "ACN011": {"code": "ACN", "name": "中信兄弟"},
@@ -135,19 +127,8 @@ def translate_games_with_ai(games: list[dict]) -> list[dict]:
     return games
 
 
-async def _get_verification_token() -> str:
-    """Get RequestVerificationToken from schedule page."""
-    async with httpx.AsyncClient(timeout=15) as client:
-        r = await client.get(SCHEDULE_PAGE, headers=HEADERS, follow_redirects=True)
-        r.raise_for_status()
-        match = re.search(r"RequestVerificationToken.*?'([^']+)'", r.text)
-        return match.group(1) if match else ""
-
-
 async def scrape_today_schedule() -> list[dict]:
-    """Scrape today's CPBL schedule via API.
-    Returns list of game dicts.
-    """
+    """Scrape today's CPBL schedule via API."""
     today = date.today()
     return await scrape_schedule_for_date(today.year, today.month, today.day)
 
@@ -155,32 +136,19 @@ async def scrape_today_schedule() -> list[dict]:
 async def scrape_schedule_for_date(year: int, month: int, day: int | None = None) -> list[dict]:
     """Scrape CPBL schedule for a given year/month, optionally filter by day."""
     try:
-        token = await _get_verification_token()
+        data = await fetch_api(
+            BASE_URL,
+            "/schedule",
+            "/schedule/getgamedatas",
+            {"kindCode": "A", "year": str(year), "month": str(month)},
+        )
 
-        api_headers = {
-            **HEADERS,
-            "Content-Type": "application/x-www-form-urlencoded",
-            "RequestVerificationToken": token,
-            "X-Requested-With": "XMLHttpRequest",
-        }
-
-        async with httpx.AsyncClient(timeout=15) as client:
-            r = await client.post(
-                SCHEDULE_API,
-                data={"kindCode": "A", "year": str(year), "month": str(month)},
-                headers=api_headers,
-                follow_redirects=True,
-            )
-            r.raise_for_status()
-
-        data = r.json()
-        if not data.get("Success"):
+        if not data or not data.get("Success"):
             logger.error(f"CPBL API returned error: {data}")
             return []
 
         game_list = json.loads(data["GameDatas"])
         games = _parse_games(game_list, year, month, day)
-        # AI translate any remaining English text
         games = translate_games_with_ai(games)
         return games
 
