@@ -716,6 +716,149 @@ def build_standings(standings: dict) -> dict:
     }
 
 
+def build_recent_results(games: list[dict]) -> dict:
+    """Build recent game results as carousel cards."""
+    bubbles = []
+    for g in games:
+        away_name = g.get("away_team_name", "")
+        home_name = g.get("home_team_name", "")
+        away_score = g.get("away_score", 0)
+        home_score = g.get("home_score", 0)
+        game_date = g.get("date", "")
+        venue = g.get("venue", "")
+        status = g.get("status", "")
+
+        if status == "postponed":
+            score_text = "延賽"
+            score_color = "#F39C12"
+        else:
+            score_text = f"{away_score}  :  {home_score}"
+            score_color = "#FFFFFF"
+
+        # Determine winner
+        away_color = "#27AE60" if away_score > home_score else "#CCCCCC"
+        home_color = "#27AE60" if home_score > away_score else "#CCCCCC"
+
+        away_logo = g.get("away_logo", "")
+        home_logo = g.get("home_logo", "")
+
+        bubble = {
+            "type": "bubble",
+            "size": "kilo",
+            "header": {
+                "type": "box",
+                "layout": "vertical",
+                "backgroundColor": "#1B2838",
+                "paddingAll": "12px",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": f"{game_date}  {venue}",
+                        "color": "#999999",
+                        "size": "xxs",
+                        "align": "center",
+                    },
+                ],
+            },
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "backgroundColor": "#1B2838",
+                "paddingAll": "15px",
+                "contents": [
+                    # Score row
+                    {
+                        "type": "box",
+                        "layout": "horizontal",
+                        "contents": [
+                            # Away team
+                            {
+                                "type": "box",
+                                "layout": "vertical",
+                                "flex": 3,
+                                "alignItems": "center",
+                                "contents": [
+                                    *(
+                                        [{
+                                            "type": "image",
+                                            "url": away_logo,
+                                            "size": "35px",
+                                            "aspectMode": "fit",
+                                        }] if away_logo else []
+                                    ),
+                                    {
+                                        "type": "text",
+                                        "text": away_name,
+                                        "color": away_color,
+                                        "weight": "bold",
+                                        "size": "xs",
+                                        "align": "center",
+                                        "margin": "sm",
+                                    },
+                                ],
+                            },
+                            # Score
+                            {
+                                "type": "box",
+                                "layout": "vertical",
+                                "flex": 2,
+                                "justifyContent": "center",
+                                "alignItems": "center",
+                                "contents": [
+                                    {
+                                        "type": "text",
+                                        "text": score_text,
+                                        "color": score_color,
+                                        "weight": "bold",
+                                        "size": "xl",
+                                        "align": "center",
+                                    },
+                                ],
+                            },
+                            # Home team
+                            {
+                                "type": "box",
+                                "layout": "vertical",
+                                "flex": 3,
+                                "alignItems": "center",
+                                "contents": [
+                                    *(
+                                        [{
+                                            "type": "image",
+                                            "url": home_logo,
+                                            "size": "35px",
+                                            "aspectMode": "fit",
+                                        }] if home_logo else []
+                                    ),
+                                    {
+                                        "type": "text",
+                                        "text": home_name,
+                                        "color": home_color,
+                                        "weight": "bold",
+                                        "size": "xs",
+                                        "align": "center",
+                                        "margin": "sm",
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                ],
+            },
+        }
+
+        bubbles.append(bubble)
+
+    return {
+        "type": "flex",
+        "altText": "近期賽果",
+        "contents": {
+            "type": "carousel",
+            "contents": bubbles[:10],
+        },
+    }
+
+
 def build_success_message(text: str) -> dict:
     """Simple success text message."""
     return {"type": "text", "text": f"✅ {text}"}

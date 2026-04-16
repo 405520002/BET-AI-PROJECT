@@ -33,11 +33,11 @@ CELL_H = HEIGHT // ROWS
 
 MENU_ITEMS = [
     ("今日賽事", "今日賽事", "#2C3E50"),
-    ("我的注單", "我的注單", "#34495E"),
+    ("近期賽果", "近期賽果", "#34495E"),
     ("儲值",     "儲值",     "#D35400"),
     ("排行榜",   "排行榜",   "#8E44AD"),
-    ("我的戰績", "我的戰績",  "#2471A3"),
     ("球隊戰績", "球隊戰績",  "#1A5276"),
+    ("我的注單", "我的注單",  "#2471A3"),
 ]
 
 
@@ -114,26 +114,37 @@ def _draw_chart(draw, cx, cy, r):
               fill="white", width=3)
 
 
+def _draw_scoreboard(draw, cx, cy, r):
+    """Draw a scoreboard icon for recent results."""
+    # Scoreboard frame
+    draw.rounded_rectangle([cx - r * 0.8, cy - r * 0.6, cx + r * 0.8, cy + r * 0.6],
+                           radius=8, outline="white", width=3)
+    # Score divider
+    draw.line([cx, cy - r * 0.6, cx, cy + r * 0.6], fill="white", width=2)
+    # Scores
+    font = ImageFont.truetype("/System/Library/Fonts/STHeiti Medium.ttc", int(r * 0.7))
+    draw.text((cx - r * 0.5, cy - r * 0.3), "3", fill="white", font=font)
+    draw.text((cx + r * 0.2, cy - r * 0.3), "5", fill="white", font=font)
+
+
 def _draw_standings(draw, cx, cy, r):
     """Draw a standings/ranking list icon."""
-    # Three horizontal bars with rank numbers
     for i, (w_ratio, y_off) in enumerate([(0.9, -0.6), (0.7, 0), (0.5, 0.6)]):
         y = cy + r * y_off
         x0 = cx - r * w_ratio / 2
         x1 = cx + r * w_ratio / 2
         draw.rounded_rectangle([x0, y - 8, x1, y + 8], radius=5, outline="white", width=3)
-        # Small circle for rank number
         draw.ellipse([x0 - 15, y - 10, x0 + 5, y + 10], fill="white")
 
 
 
 ICON_DRAWERS = [
-    _draw_baseball,
-    _draw_ticket,
-    _draw_coin,
-    _draw_trophy,
-    _draw_chart,
-    _draw_standings,
+    _draw_baseball,     # 今日賽事
+    _draw_scoreboard,   # 近期賽果
+    _draw_coin,         # 儲值
+    _draw_trophy,       # 排行榜
+    _draw_standings,    # 球隊戰績
+    _draw_ticket,       # 我的注單
 ]
 
 

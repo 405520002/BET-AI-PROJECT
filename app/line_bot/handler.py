@@ -157,6 +157,8 @@ def handle_text_message(event: MessageEvent):
         _handle_my_bets(event, user_id)
     elif cmd == "standings":
         _handle_standings(event)
+    elif cmd == "recent_results":
+        _handle_recent_results(event)
     elif cmd == "help":
         _handle_help(event)
     else:
@@ -302,6 +304,83 @@ def _handle_standings(event):
         return
     msg = flex_messages.build_standings(standings)
     _reply(event.reply_token, [msg])
+
+
+def _handle_recent_results(event):
+    import httpx
+    import re
+    import json
+    from app.scraper.cpbl_schedule import scrape_schedule_for_date, _to_chinese_name, _to_chinese_venue
+    from datetime import date, timedelta
+
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+            "Accept-Language": "zh-TW,zh;q=0.9",
+            "Referer": "https://en.cpbl.com.tw/",
+        }
+        r = httpx.get("https://en.cpbl.com.tw/schedule", headers=headers, follow_redirects=True, timeout=15)
+        match = re.search(r"RequestVerificationToken[^']*'([^']+)'", r.text)
+        token = match.group(1) if match else ""
+
+        today = date.today()
+        r2 = httpx.post(
+            "https://en.cpbl.com.tw/schedule/getgamedatas",
+            data={"kindCode": "A", "year": str(today.year), "month": str(today.month)},
+            headers={
+                **headers,
+                "RequestVerificationToken": token,
+                "X-Requested-With": "XMLHttpRequest",
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            follow_redirects=True,
+            timeout=15,
+        )
+
+        data = r2.json()
+        all_games = json.loads(data.get("GameDatas", "[]"))
+
+        # Filter: completed games with scores, sorted by date desc
+        finished = []
+        for g in all_games:
+            home_score = g.get("HomeScore", 0) or 0
+            away_score = g.get("VisitingScore", 0) or 0
+            game_end = g.get("GameDateTimeE", "")
+            is_postponed = g.get("IsGameStop", "0") == "1"
+
+            if not game_end and not is_postponed:
+                continue
+            if home_score == 0 and away_score == 0 and not is_postponed:
+                continue
+
+            game_date = g.get("GameDate", "")[:10]
+            finished.append({
+                "date": game_date,
+                "away_team_name": _to_chinese_name(g.get("VisitingTeamName", "")),
+                "home_team_name": _to_chinese_name(g.get("HomeTeamName", "")),
+                "away_score": away_score,
+                "home_score": home_score,
+                "venue": _to_chinese_venue(g.get("FieldAbbe", "")),
+                "away_logo": "https://en.cpbl.com.tw" + g.get("VisitingClubSmallImgPath", "") if g.get("VisitingClubSmallImgPath") else "",
+                "home_logo": "https://en.cpbl.com.tw" + g.get("HomeClubSmallImgPath", "") if g.get("HomeClubSmallImgPath") else "",
+                "status": "postponed" if is_postponed else "final",
+            })
+
+        # Sort by date desc, take last 10
+        finished.sort(key=lambda x: x["date"], reverse=True)
+        recent = finished[:10]
+
+        if not recent:
+            _reply(event.reply_token, ["目前沒有已完成的比賽紀錄"])
+            return
+
+        msg = flex_messages.build_recent_results(recent)
+        _reply(event.reply_token, [msg])
+
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Recent results error: {e}")
+        _reply(event.reply_token, [flex_messages.build_error_message("無法取得近期賽果")])
 
 
 def _handle_my_bets(event, user_id: str):
