@@ -310,7 +310,7 @@ def _handle_recent_results(event):
     import httpx
     import re
     import json
-    from app.scraper.cpbl_schedule import scrape_schedule_for_date, _to_chinese_name, _to_chinese_venue
+    from app.scraper.cpbl_schedule import _to_chinese_name, _to_chinese_venue
     from datetime import date, timedelta
 
     try:
@@ -320,6 +320,7 @@ def _handle_recent_results(event):
             "Referer": "https://en.cpbl.com.tw/",
         }
         r = httpx.get("https://en.cpbl.com.tw/schedule", headers=headers, follow_redirects=True, timeout=15)
+        r.encoding = "utf-8"
         match = re.search(r"RequestVerificationToken[^']*'([^']+)'", r.text)
         token = match.group(1) if match else ""
 
@@ -336,6 +337,7 @@ def _handle_recent_results(event):
             follow_redirects=True,
             timeout=15,
         )
+        r2.encoding = "utf-8"
 
         data = r2.json()
         all_games = json.loads(data.get("GameDatas", "[]"))
