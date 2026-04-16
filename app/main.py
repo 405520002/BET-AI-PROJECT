@@ -21,9 +21,9 @@ from app.line_bot.handler import (
     handle_postback,
 )
 from app.scheduler.jobs import (
-    scrape_and_generate_odds,
-    scrape_results,
-    settle_today,
+    morning_job,
+    midday_update,
+    midnight_settle,
 )
 
 logging.basicConfig(
@@ -82,27 +82,27 @@ def _verify_cron(cron_secret: Optional[str]):
         raise HTTPException(status_code=403, detail="Unauthorized")
 
 
-@app.post("/cron/scrape-schedule")
-async def cron_scrape_schedule(x_cron_secret: Optional[str] = Header(None)):
-    """Daily 08:00 - Scrape schedule and generate odds."""
+@app.post("/cron/morning")
+async def cron_morning(x_cron_secret: Optional[str] = Header(None)):
+    """08:00 - Scrape schedule + AI generate odds."""
     _verify_cron(x_cron_secret)
-    result = await scrape_and_generate_odds()
+    result = await morning_job()
     return {"status": "ok", **result}
 
 
-@app.post("/cron/scrape-results")
-async def cron_scrape_results(x_cron_secret: Optional[str] = Header(None)):
-    """Daily 22:30 - Scrape game results."""
+@app.post("/cron/midday")
+async def cron_midday(x_cron_secret: Optional[str] = Header(None)):
+    """12:00 - Update game info (pitchers/venue), keep odds."""
     _verify_cron(x_cron_secret)
-    result = await scrape_results()
+    result = await midday_update()
     return {"status": "ok", **result}
 
 
 @app.post("/cron/settle")
 async def cron_settle(x_cron_secret: Optional[str] = Header(None)):
-    """Daily 00:00 - Settle bets."""
+    """00:00 - Scrape results + settle bets."""
     _verify_cron(x_cron_secret)
-    result = await settle_today()
+    result = await midnight_settle()
     return {"status": "ok", **result}
 
 
