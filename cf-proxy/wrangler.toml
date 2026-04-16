@@ -1,0 +1,7 @@
+name = "cpbl-proxy"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+# 優先使用亞洲節點
+[placement]
+mode = "smart"

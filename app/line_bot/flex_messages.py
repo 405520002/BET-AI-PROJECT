@@ -66,18 +66,88 @@ def build_game_card(game: dict) -> dict:
                     "color": "#AAAAAA",
                     "size": "xs",
                 },
+                # Team logos + names
                 {
-                    "type": "text",
-                    "text": f"{game.get('away_team_name', '')}  VS  {game.get('home_team_name', '')}",
-                    "color": "#FFFFFF",
-                    "weight": "bold",
-                    "size": "lg",
-                    "margin": "sm",
+                    "type": "box",
+                    "layout": "horizontal",
+                    "margin": "lg",
+                    "contents": [
+                        # Away team
+                        {
+                            "type": "box",
+                            "layout": "vertical",
+                            "flex": 2,
+                            "alignItems": "center",
+                            "contents": [
+                                *(
+                                    [{
+                                        "type": "image",
+                                        "url": game.get("away_logo", ""),
+                                        "size": "40px",
+                                        "aspectMode": "fit",
+                                    }] if game.get("away_logo") else []
+                                ),
+                                {
+                                    "type": "text",
+                                    "text": game.get("away_team_name", ""),
+                                    "color": "#FFFFFF",
+                                    "weight": "bold",
+                                    "size": "sm",
+                                    "align": "center",
+                                    "margin": "sm",
+                                },
+                            ],
+                        },
+                        # VS
+                        {
+                            "type": "box",
+                            "layout": "vertical",
+                            "flex": 1,
+                            "justifyContent": "center",
+                            "alignItems": "center",
+                            "contents": [
+                                {
+                                    "type": "text",
+                                    "text": "VS",
+                                    "color": "#F39C12",
+                                    "weight": "bold",
+                                    "size": "lg",
+                                    "align": "center",
+                                },
+                            ],
+                        },
+                        # Home team
+                        {
+                            "type": "box",
+                            "layout": "vertical",
+                            "flex": 2,
+                            "alignItems": "center",
+                            "contents": [
+                                *(
+                                    [{
+                                        "type": "image",
+                                        "url": game.get("home_logo", ""),
+                                        "size": "40px",
+                                        "aspectMode": "fit",
+                                    }] if game.get("home_logo") else []
+                                ),
+                                {
+                                    "type": "text",
+                                    "text": game.get("home_team_name", ""),
+                                    "color": "#FFFFFF",
+                                    "weight": "bold",
+                                    "size": "sm",
+                                    "align": "center",
+                                    "margin": "sm",
+                                },
+                            ],
+                        },
+                    ],
                 },
                 {
                     "type": "box",
                     "layout": "horizontal",
-                    "margin": "md",
+                    "margin": "lg",
                     "contents": [
                         {
                             "type": "text",
