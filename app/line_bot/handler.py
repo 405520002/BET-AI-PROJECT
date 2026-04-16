@@ -205,17 +205,31 @@ def _handle_games(event, user_id: str):
     from datetime import date
     today = date.today().isoformat()
     all_games = game_repo.get_games_by_date(today)
-    # Only show games that are still open for betting
-    open_games = [g for g in all_games if g.get("status") == "scheduled"]
+    scheduled = [g for g in all_games if g.get("status") == "scheduled"]
 
-    if not open_games:
+    if not scheduled:
         if all_games:
-            _reply(event.reply_token, ["今日賽事已全部開始或結束，無法下注。"])
+            _reply(event.reply_token, ["今日賽事已全部結束。"])
         else:
             _reply(event.reply_token, ["今日沒有賽事，明天再來！"])
         return
 
-    carousel = flex_messages.build_games_carousel(open_games)
+    # Mark which games can still be bet on (before game time)
+    now = datetime.now()
+    for g in scheduled:
+        game_time = g.get("game_time", "")
+        can_bet = True
+        if game_time:
+            try:
+                hour, minute = int(game_time.split(":")[0]), int(game_time.split(":")[1])
+                game_start = now.replace(hour=hour, minute=minute, second=0)
+                if now >= game_start:
+                    can_bet = False
+            except (ValueError, IndexError):
+                pass
+        g["_can_bet"] = can_bet
+
+    carousel = flex_messages.build_games_carousel(scheduled)
     _reply(event.reply_token, [carousel])
 
 

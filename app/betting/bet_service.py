@@ -83,6 +83,19 @@ def place_bet(user_id: str, game_id: str, market_index: int, selection: str, odd
     if game.get("status") != "scheduled":
         return {"success": False, "error": "比賽已開始或結束，無法下注"}
 
+    # Check if game time has passed
+    from datetime import datetime
+    game_time = game.get("game_time", "")
+    if game_time:
+        try:
+            now = datetime.now()
+            hour, minute = int(game_time.split(":")[0]), int(game_time.split(":")[1])
+            game_start = now.replace(hour=hour, minute=minute, second=0)
+            if now >= game_start:
+                return {"success": False, "error": "比賽已開始，無法下注"}
+        except (ValueError, IndexError):
+            pass
+
     # Verify odds match (protect against stale odds)
     markets = game.get("odds", {}).get("markets", [])
     if market_index >= len(markets):

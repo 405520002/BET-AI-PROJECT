@@ -5,6 +5,7 @@ from __future__ import annotations
 def build_game_card(game: dict) -> dict:
     """Build a single game bubble for the carousel."""
     markets = game.get("odds", {}).get("markets", [])
+    can_bet = game.get("_can_bet", True)
 
     # Build market rows
     market_contents = []
@@ -12,19 +13,33 @@ def build_game_card(game: dict) -> dict:
         options = market.get("options", [])
         option_buttons = []
         for opt in options:
-            option_buttons.append({
-                "type": "button",
-                "action": {
-                    "type": "postback",
-                    "label": f"{opt['label']} @{opt['odds']}",
-                    "data": f"bet|{game['id']}|{i}|{opt['label']}|{opt['odds']}",
-                    "displayText": f"下注: {opt['label']} @{opt['odds']}",
-                },
-                "style": "primary",
-                "height": "sm",
-                "margin": "sm",
-                "color": "#4A90D9",
-            })
+            if can_bet:
+                option_buttons.append({
+                    "type": "button",
+                    "action": {
+                        "type": "postback",
+                        "label": f"{opt['label']} @{opt['odds']}",
+                        "data": f"bet|{game['id']}|{i}|{opt['label']}|{opt['odds']}",
+                        "displayText": f"下注: {opt['label']} @{opt['odds']}",
+                    },
+                    "style": "primary",
+                    "height": "sm",
+                    "margin": "sm",
+                    "color": "#4A90D9",
+                })
+            else:
+                option_buttons.append({
+                    "type": "button",
+                    "action": {
+                        "type": "message",
+                        "label": f"{opt['label']} @{opt['odds']}",
+                        "text": "比賽已開始，無法下注",
+                    },
+                    "style": "secondary",
+                    "height": "sm",
+                    "margin": "sm",
+                    "color": "#CCCCCC",
+                })
 
         market_contents.append({
             "type": "box",
@@ -61,10 +76,28 @@ def build_game_card(game: dict) -> dict:
             "paddingAll": "15px",
             "contents": [
                 {
-                    "type": "text",
-                    "text": f"CPBL {game.get('date', '')}",
-                    "color": "#AAAAAA",
-                    "size": "xs",
+                    "type": "box",
+                    "layout": "horizontal",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": f"CPBL {game.get('date', '')}",
+                            "color": "#AAAAAA",
+                            "size": "xs",
+                            "flex": 3,
+                        },
+                        *(
+                            [{
+                                "type": "text",
+                                "text": "已封盤",
+                                "color": "#E74C3C",
+                                "size": "xs",
+                                "weight": "bold",
+                                "align": "end",
+                                "flex": 1,
+                            }] if not can_bet else []
+                        ),
+                    ],
                 },
                 # Team logos + names
                 {
