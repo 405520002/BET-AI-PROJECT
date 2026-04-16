@@ -126,7 +126,8 @@ def _generate_two_step(games: list[dict], standings: dict) -> dict[str, dict]:
             return result
 
         except Exception as e:
-            logger.warning(f"Step 2 (JSON) attempt {attempt + 1} failed: {e}")
+            raw = (response.choices[0].message.content or "")[:200] if response else ""
+            logger.warning(f"Step 2 (JSON) attempt {attempt + 1} failed: {e} | raw: {raw}")
             time.sleep(1)
 
     raise RuntimeError("Step 2 (JSON via Groq) failed")
@@ -134,15 +135,49 @@ def _generate_two_step(games: list[dict], standings: dict) -> dict[str, dict]:
 
 def _parse_json_response(text: str) -> list[dict]:
     text = text.strip()
+    # Remove thinking tags
+    if "<think>" in text:
+        idx = text.rfind("</think>")
+        if idx != -1:
+            text = text[idx + 8:].strip()
+    # Remove markdown code blocks
     if "```json" in text:
         text = text.split("```json")[1].split("```")[0].strip()
     elif "```" in text:
         text = text.split("```")[1].split("```")[0].strip()
+    # Find JSON array
     start = text.find("[")
     end = text.rfind("]")
     if start != -1 and end != -1:
         text = text[start:end + 1]
-    return json.loads(text)
+
+    # Try direct parse first
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    # Fix common JSON issues
+    import re
+    # Remove trailing commas before } or ]
+    text = re.sub(r',\s*([}\]])', r'\1', text)
+    # Fix unescaped newlines in strings
+    text = re.sub(r'(?<!\\)\n', ' ', text)
+    # Try again
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    # Last resort: try to parse partial JSON (cut at last valid })
+    for i in range(len(text) - 1, 0, -1):
+        if text[i] == ']':
+            try:
+                return json.loads(text[:i + 1])
+            except json.JSONDecodeError:
+                continue
+
+    raise json.JSONDecodeError("Cannot parse JSON", text, 0)
 
 
 def _generate_with_fallback(games: list[dict], standings: dict) -> dict[str, dict]:
