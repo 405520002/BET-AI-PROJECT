@@ -17,9 +17,10 @@ MAX_RETRIES = 6
 
 # Models to try in order (rotate on failure)
 MODELS = [
+    "meta-llama/llama-4-maverick:free",
     "nvidia/nemotron-3-super-120b-a12b:free",
+    "qwen/qwen3-235b-a22b:free",
     "deepseek/deepseek-chat-v3-0324:free",
-    "google/gemini-2.0-flash-exp:free",
 ]
 
 
