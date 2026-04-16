@@ -1,4 +1,7 @@
-"""Odds engine: two-step LLM approach - design markets then format JSON."""
+"""Odds engine: two-step LLM approach.
+Step 1 (OpenRouter free models): creative market design
+Step 2 (Groq Llama 3.3): reliable JSON formatting
+"""
 from __future__ import annotations
 
 import json
@@ -15,17 +18,25 @@ logger = logging.getLogger(__name__)
 
 MAX_RETRIES = 3
 
-MODELS = [
+# Step 1: creative models (free, for designing markets)
+DESIGN_MODELS = [
     "meta-llama/llama-4-maverick:free",
     "nvidia/nemotron-3-super-120b-a12b:free",
     "qwen/qwen3-235b-a22b:free",
 ]
 
 
-def _get_client() -> OpenAI:
+def _get_openrouter() -> OpenAI:
     return OpenAI(
         api_key=settings.openrouter_api_key,
         base_url="https://openrouter.ai/api/v1",
+    )
+
+
+def _get_groq() -> OpenAI:
+    return OpenAI(
+        api_key=settings.groq_api_key,
+        base_url="https://api.groq.com/openai/v1",
     )
 
 
@@ -43,22 +54,22 @@ def _generate_two_step(games: list[dict], standings: dict) -> dict[str, dict]:
     """Step 1: AI designs markets in natural language. Step 2: AI converts to JSON."""
     client = _get_client()
 
-    # === Step 1: Design markets ===
+    # === Step 1: Design markets (OpenRouter free models) ===
     design_prompt = build_design_prompt(games, standings)
     design_text = None
+    openrouter = _get_openrouter()
 
     for attempt in range(MAX_RETRIES):
-        model = MODELS[attempt % len(MODELS)]
+        model = DESIGN_MODELS[attempt % len(DESIGN_MODELS)]
         try:
             logger.info(f"Step 1 (design) attempt {attempt + 1}/{MAX_RETRIES} with {model}")
-            response = client.chat.completions.create(
+            response = openrouter.chat.completions.create(
                 model=model,
                 messages=[{"role": "user", "content": design_prompt}],
                 temperature=0.7,
                 max_tokens=3000,
             )
             design_text = response.choices[0].message.content or ""
-            # Remove thinking tags
             if "<think>" in design_text:
                 idx = design_text.rfind("</think>")
                 if idx != -1:
@@ -73,19 +84,19 @@ def _generate_two_step(games: list[dict], standings: dict) -> dict[str, dict]:
     if not design_text or len(design_text) < 100:
         raise RuntimeError("Step 1 (design) failed")
 
-    # === Step 2: Convert to JSON ===
+    # === Step 2: Convert to JSON (Groq - fast & reliable) ===
     game_ids = [g.get("id", "") for g in games]
     json_prompt = build_json_prompt(design_text, game_ids)
+    groq = _get_groq()
 
     for attempt in range(MAX_RETRIES):
-        model = MODELS[attempt % len(MODELS)]
         try:
-            logger.info(f"Step 2 (JSON) attempt {attempt + 1}/{MAX_RETRIES} with {model}")
-            response = client.chat.completions.create(
-                model=model,
+            logger.info(f"Step 2 (JSON via Groq) attempt {attempt + 1}/{MAX_RETRIES}")
+            response = groq.chat.completions.create(
+                model="llama-3.3-70b-versatile",
                 messages=[{"role": "user", "content": json_prompt}],
                 temperature=0,
-                max_tokens=3000,
+                max_tokens=4096,
             )
             json_text = response.choices[0].message.content or ""
             # Remove thinking tags
@@ -120,10 +131,10 @@ def _generate_two_step(games: list[dict], standings: dict) -> dict[str, dict]:
             return result
 
         except Exception as e:
-            logger.warning(f"Step 2 attempt {attempt + 1} failed: {e}")
+            logger.warning(f"Step 2 (Groq) attempt {attempt + 1} failed: {e}")
             time.sleep(1)
 
-    raise RuntimeError("Step 2 (JSON) failed")
+    raise RuntimeError("Step 2 (JSON via Groq) failed")
 
 
 def _parse_json_response(text: str) -> list[dict]:
