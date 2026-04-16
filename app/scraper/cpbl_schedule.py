@@ -10,7 +10,7 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-BASE_URL = "https://www.cpbl.com.tw"
+BASE_URL = "https://en.cpbl.com.tw"
 SCHEDULE_PAGE = f"{BASE_URL}/schedule"
 SCHEDULE_API = f"{BASE_URL}/schedule/getgamedatas"
 
