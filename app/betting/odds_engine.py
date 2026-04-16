@@ -20,9 +20,9 @@ MAX_RETRIES = 3
 
 # Step 1: creative models (free, for designing markets)
 DESIGN_MODELS = [
-    "meta-llama/llama-4-maverick:free",
     "nvidia/nemotron-3-super-120b-a12b:free",
-    "qwen/qwen3-235b-a22b:free",
+    "google/gemma-3-27b-it:free",
+    "nvidia/nemotron-3-super-120b-a12b:free",
 ]
 
 
