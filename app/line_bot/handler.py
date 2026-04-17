@@ -496,6 +496,56 @@ def _handle_live(event, user_id: str):
                         gs_code = gd.get("GameStatus", 0)
                         game_status = {0: "未開始", 1: "比賽中", 2: "比賽中", 3: "比賽結束"}.get(gs_code, "")
 
+                    # Top batters (sorted by hits+HR)
+                    bat_raw = data.get("BattingJson") or "[]"
+                    bat_list = json.loads(bat_raw) if isinstance(bat_raw, str) else (bat_raw or [])
+                    batters = []
+                    for b in bat_list:
+                        hits = int(b.get("HittingCnt", 0) or 0)
+                        hr = int(b.get("HomeRunCnt", 0) or 0)
+                        if hits > 0 or hr > 0:
+                            vh = int(float(b.get("VisitingHomeType", 0) or 0))
+                            batters.append({
+                                "name": b.get("HitterName", "") or "",
+                                "team": "home" if vh == 2 else "away",
+                                "hits": hits,
+                                "hr": hr,
+                                "rbi": int(b.get("RunBattedINCnt", 0) or 0),
+                                "runs": int(b.get("ScoreCnt", 0) or 0),
+                                "so": int(b.get("StrikeOutCnt", 0) or 0),
+                                "pa": int(b.get("PlateAppearances", 0) or 0),
+                            })
+                    batters.sort(key=lambda x: x["hits"] + x["hr"] * 2, reverse=True)
+
+                    # Detailed pitchers
+                    detailed_pitchers = []
+                    for p in pitching_list:
+                        vh = int(float(p.get("VisitingHomeType", 0) or 0))
+                        detailed_pitchers.append({
+                            "name": p.get("PitcherName", "") or "",
+                            "team": "home" if vh == 2 else "away",
+                            "role": p.get("RoleType", ""),
+                            "ip": f"{int(p.get('InningPitchedCnt', 0) or 0)}.{int(p.get('InningPitchedDiv3Cnt', 0) or 0)}",
+                            "k": int(p.get("StrikeOutCnt", 0) or 0),
+                            "er": int(p.get("EarnedRunCnt", 0) or 0),
+                            "pitches": int(p.get("PitchCnt", 0) or 0),
+                            "strikes": int(p.get("StrikeCnt", 0) or 0),
+                            "balls": int(p.get("BallCnt", 0) or 0),
+                            "max_speed": int(p.get("GameHigherSpeedPitch", 0) or 0),
+                        })
+
+                    # Current at-bat from LiveLog
+                    log_raw = data.get("LiveLogJson") or "[]"
+                    log_list = json.loads(log_raw) if isinstance(log_raw, str) else (log_raw or [])
+                    current_ab = {}
+                    if log_list:
+                        last = log_list[-1]
+                        current_ab = {
+                            "hitter": last.get("HitterName", ""),
+                            "pitcher": last.get("PitcherName", ""),
+                            "count": f"{last.get('StrikeCnt', 0)}-{last.get('BallCnt', 0)}",
+                        }
+
                     live_games.append({
                         "away_team_name": _to_chinese_name(gd.get("VisitingTeamName") or game.get("away_team_name", "")),
                         "home_team_name": _to_chinese_name(gd.get("HomeTeamName") or game.get("home_team_name", "")),
@@ -503,8 +553,12 @@ def _handle_live(event, user_id: str):
                         "home_score": gd.get("HomeTotalScore", 0) or 0,
                         "venue": _to_chinese_venue(gd.get("FieldAbbe", game.get("venue", ""))),
                         "status_text": game_status,
+                        "weather": gd.get("WeatherDesc", ""),
+                        "audience": gd.get("AudienceCntBackend", 0) or 0,
                         "innings": {"away": away_scores, "home": home_scores},
-                        "pitchers": pitchers,
+                        "pitchers": detailed_pitchers,
+                        "batters": batters[:6],
+                        "current_ab": current_ab,
                     })
 
                 except Exception as e:

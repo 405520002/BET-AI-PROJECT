@@ -1093,19 +1093,62 @@ def build_live_scores(games: list[dict]) -> dict:
                 },
             ]
 
-        # Pitchers info
+        # Current at-bat
+        current_ab = g.get("current_ab", {})
+        current_rows = []
+        if current_ab.get("hitter"):
+            current_rows = [{
+                "type": "box", "layout": "horizontal", "margin": "md",
+                "contents": [
+                    {"type": "text", "text": f"打: {current_ab['hitter']}", "size": "xs", "color": "#F1C40F", "flex": 3},
+                    {"type": "text", "text": f"vs", "size": "xxs", "color": "#888888", "align": "center", "flex": 1},
+                    {"type": "text", "text": f"投: {current_ab.get('pitcher','')}", "size": "xs", "color": "#3498DB", "align": "end", "flex": 3},
+                ],
+            }]
+
+        # Pitchers detail
         pitchers = g.get("pitchers", [])
         pitcher_rows = []
-        for p in pitchers[:2]:
+        for p in pitchers:
             name = p.get("name", "") or "---"
             side = "主" if p.get("team") == "home" else "客"
-            text = f"{side}投 {name} {p.get('ip','')}局 {p.get('strikeouts',0)}K"
-            if text.strip():
-                pitcher_rows.append({
-                    "type": "text",
-                    "text": text,
-                    "size": "xxs", "color": "#AAAAAA",
-                })
+            role = f"({p.get('role','')})" if p.get("role") else ""
+            speed = f" {p.get('max_speed','')}km" if p.get("max_speed", 0) > 0 else ""
+            text = f"{side} {name}{role} {p.get('ip','')}局 {p.get('k',0)}K {p.get('er',0)}ER"
+            pitches = f"{p.get('pitches',0)}球({p.get('strikes',0)}好{p.get('balls',0)}壞){speed}"
+            pitcher_rows.append({"type": "text", "text": text, "size": "xxs", "color": "#CCCCCC"})
+            pitcher_rows.append({"type": "text", "text": f"  {pitches}", "size": "xxs", "color": "#888888"})
+
+        # Top batters
+        batters = g.get("batters", [])
+        batter_rows = []
+        for b in batters[:4]:
+            name = b.get("name", "") or "---"
+            side = "主" if b.get("team") == "home" else "客"
+            stats = f"{b.get('hits',0)}/{b.get('pa',0)}"
+            if b.get("hr", 0) > 0:
+                stats += f" {b['hr']}轟"
+            if b.get("rbi", 0) > 0:
+                stats += f" {b['rbi']}打點"
+            if b.get("runs", 0) > 0:
+                stats += f" {b['runs']}得分"
+            batter_rows.append({
+                "type": "box", "layout": "horizontal",
+                "contents": [
+                    {"type": "text", "text": f"{side} {name}", "size": "xxs", "color": "#CCCCCC", "flex": 3},
+                    {"type": "text", "text": stats, "size": "xxs", "color": "#FFFFFF", "align": "end", "flex": 4},
+                ],
+            })
+
+        # Weather + audience
+        weather = g.get("weather", "")
+        audience = g.get("audience", 0)
+        info_text = ""
+        if weather:
+            # Shorten weather
+            info_text = weather.split("。")[0] if "。" in weather else weather[:20]
+        if audience and audience > 0:
+            info_text += f"  👤{audience:,}"
 
         bubble = {
             "type": "bubble",
@@ -1114,34 +1157,38 @@ def build_live_scores(games: list[dict]) -> dict:
                 "type": "box",
                 "layout": "vertical",
                 "backgroundColor": "#1B2838",
-                "paddingAll": "15px",
+                "paddingAll": "12px",
                 "contents": [
-                    # Status badge
+                    # Status + venue
                     {
-                        "type": "box",
-                        "layout": "horizontal",
+                        "type": "box", "layout": "horizontal",
                         "contents": [
-                            {
-                                "type": "text",
-                                "text": status_text or "進行中",
-                                "size": "xs",
-                                "color": "#F39C12" if "進行" in (status_text or "進行中") else "#27AE60",
-                                "weight": "bold",
-                            },
-                            {"type": "filler"},
-                            {"type": "text", "text": g.get("venue", "") or " ", "size": "xxs", "color": "#888888", "align": "end"},
+                            {"type": "text", "text": status_text or "進行中", "size": "xs",
+                             "color": "#F39C12" if "進行" in (status_text or "進行中") else "#27AE60", "weight": "bold", "flex": 2},
+                            {"type": "text", "text": g.get("venue", "") or " ", "size": "xxs", "color": "#888888", "align": "end", "flex": 3},
                         ],
                     },
-                    {"type": "separator", "margin": "md", "color": "#333333"},
-                    # Scoreboard rows (inning-by-inning or simple score)
-                    *scoreboard_rows,
-                    {"type": "separator", "margin": "md", "color": "#333333"},
-                    # Pitcher info
+                    # Weather + audience
                     *(
-                        [{
-                            "type": "box", "layout": "vertical", "margin": "md",
-                            "contents": pitcher_rows,
-                        }] if pitcher_rows else []
+                        [{"type": "text", "text": info_text, "size": "xxs", "color": "#666666", "margin": "xs"}]
+                        if info_text else []
+                    ),
+                    {"type": "separator", "margin": "sm", "color": "#333333"},
+                    # Score
+                    *scoreboard_rows,
+                    # Current at-bat
+                    *(current_rows if current_rows else []),
+                    {"type": "separator", "margin": "sm", "color": "#333333"},
+                    # Pitchers
+                    *(
+                        [{"type": "text", "text": "投手", "size": "xs", "color": "#F39C12", "weight": "bold", "margin": "md"}]
+                        + pitcher_rows if pitcher_rows else []
+                    ),
+                    {"type": "separator", "margin": "sm", "color": "#333333"},
+                    # Batters
+                    *(
+                        [{"type": "text", "text": "打擊", "size": "xs", "color": "#F39C12", "weight": "bold", "margin": "md"}]
+                        + batter_rows if batter_rows else []
                     ),
                 ],
             },
