@@ -391,12 +391,15 @@ def _handle_live(event, user_id: str):
         cache_age = (now - cached["updated_at"]).total_seconds()
         if cache_age < 120 and cached.get("data"):
             _live_rate_limit[user_id] = now
-            if not cached["data"]:
-                _reply(event.reply_token, ["目前沒有進行中的比賽"])
-                return
             msg = flex_messages.build_live_scores(cached["data"])
             _reply(event.reply_token, [msg])
             return
+        elif cache_age < 120 and not cached.get("data"):
+            _reply(event.reply_token, ["目前沒有進行中的比賽"])
+            return
+
+    # Reply immediately, then push results (scraping takes time)
+    _reply(event.reply_token, ["⚾ 查詢即時比分中..."])
 
     # Scrape fresh live data
     try:
@@ -518,16 +521,35 @@ def _handle_live(event, user_id: str):
 
         _live_rate_limit[user_id] = now
 
+        # Push result to user (reply token already used)
+        from linebot.v3.messaging import (
+            PushMessageRequest, FlexMessage, FlexContainer, TextMessage as TM,
+        )
+        api = _get_api()
         if not live_games:
-            _reply(event.reply_token, ["目前沒有進行中的比賽"])
+            api.push_message(PushMessageRequest(
+                to=user_id, messages=[TM(text="目前沒有進行中的比賽")]
+            ))
             return
 
-        msg = flex_messages.build_live_scores(live_games)
-        _reply(event.reply_token, [msg])
+        msg_data = flex_messages.build_live_scores(live_games)
+        api.push_message(PushMessageRequest(
+            to=user_id,
+            messages=[FlexMessage(
+                alt_text="即時比分",
+                contents=FlexContainer.from_dict(msg_data["contents"]),
+            )],
+        ))
 
     except Exception as e:
         logger.error(f"Live score error: {e}")
-        _reply(event.reply_token, [flex_messages.build_error_message("無法取得即時比分")])
+        try:
+            from linebot.v3.messaging import PushMessageRequest, TextMessage as TM
+            _get_api().push_message(PushMessageRequest(
+                to=user_id, messages=[TM(text="❌ 無法取得即時比分")]
+            ))
+        except Exception:
+            pass
 
 
 def _handle_recent_results(event):
