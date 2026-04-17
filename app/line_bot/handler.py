@@ -445,61 +445,61 @@ def _handle_live(event, user_id: str):
                         continue
 
                     data = r2.json()
-                gd_raw = data.get("GameDetailJson") or "[]"
-                gd_list = json.loads(gd_raw) if isinstance(gd_raw, str) else (gd_raw or [])
-                if not gd_list:
-                    continue
-                gd = gd_list[0] if isinstance(gd_list, list) else gd_list
+                    gd_raw = data.get("GameDetailJson") or "[]"
+                    gd_list = json.loads(gd_raw) if isinstance(gd_raw, str) else (gd_raw or [])
+                    if not gd_list:
+                        continue
+                    gd = gd_list[0] if isinstance(gd_list, list) else gd_list
 
-                # Parse scoreboard
-                sb_raw = data.get("ScoreboardJson") or "[]"
-                sb_list = json.loads(sb_raw) if isinstance(sb_raw, str) else (sb_raw or [])
-                away_inn = {}
-                home_inn = {}
-                for item in sb_list:
-                    inning = item.get("Inning", 0)
-                    score = item.get("Score", 0) or 0
-                    vh = item.get("VisitingHomeType", 0)
-                    if vh == 1:
-                        away_inn[inning] = score
-                    elif vh == 2:
-                        home_inn[inning] = score
+                    # Parse scoreboard
+                    sb_raw = data.get("ScoreboardJson") or "[]"
+                    sb_list = json.loads(sb_raw) if isinstance(sb_raw, str) else (sb_raw or [])
+                    away_inn = {}
+                    home_inn = {}
+                    for item in sb_list:
+                        inning = item.get("Inning", 0)
+                        score = item.get("Score", 0) or 0
+                        vh = item.get("VisitingHomeType", 0)
+                        if vh == 1:
+                            away_inn[inning] = score
+                        elif vh == 2:
+                            home_inn[inning] = score
 
-                max_inning = max(list(away_inn.keys()) + list(home_inn.keys()) + [0])
-                away_scores = [away_inn.get(i, 0) for i in range(1, max_inning + 1)]
-                home_scores = [home_inn.get(i, 0) for i in range(1, max_inning + 1)]
+                    max_inning = max(list(away_inn.keys()) + list(home_inn.keys()) + [0])
+                    away_scores = [away_inn.get(i, 0) for i in range(1, max_inning + 1)]
+                    home_scores = [home_inn.get(i, 0) for i in range(1, max_inning + 1)]
 
-                # Parse pitchers
-                pitch_raw = data.get("PitchingJson") or "[]"
-                pitching_list = json.loads(pitch_raw) if isinstance(pitch_raw, str) else (pitch_raw or [])
-                pitchers = []
-                for p in pitching_list[:4]:
-                    pitchers.append({
-                        "name": p.get("PitcherName", "") or p.get("PlayerName", ""),
-                        "team": "home" if p.get("VisitingHomeType") == 2 else "away",
-                        "ip": f"{p.get('InningPitchedCnt', 0) or 0}.{p.get('InningPitchedDiv3Cnt', 0) or 0}",
-                        "strikeouts": p.get("StrikeOutCnt", 0) or 0,
+                    # Parse pitchers
+                    pitch_raw = data.get("PitchingJson") or "[]"
+                    pitching_list = json.loads(pitch_raw) if isinstance(pitch_raw, str) else (pitch_raw or [])
+                    pitchers = []
+                    for p in pitching_list[:4]:
+                        pitchers.append({
+                            "name": p.get("PitcherName", "") or p.get("PlayerName", ""),
+                            "team": "home" if p.get("VisitingHomeType") == 2 else "away",
+                            "ip": f"{p.get('InningPitchedCnt', 0) or 0}.{p.get('InningPitchedDiv3Cnt', 0) or 0}",
+                            "strikeouts": p.get("StrikeOutCnt", 0) or 0,
+                        })
+
+                    # Determine status text
+                    game_status = gd.get("GameStatusChi", "")
+                    if not game_status:
+                        gs_code = gd.get("GameStatus", 0)
+                        game_status = {0: "未開始", 1: "比賽中", 2: "比賽中", 3: "比賽結束"}.get(gs_code, "")
+
+                    live_games.append({
+                        "away_team_name": _to_chinese_name(gd.get("VisitingTeamName", "")),
+                        "home_team_name": _to_chinese_name(gd.get("HomeTeamName", "")),
+                        "away_score": gd.get("VisitingTotalScore", 0) or 0,
+                        "home_score": gd.get("HomeTotalScore", 0) or 0,
+                        "venue": _to_chinese_venue(gd.get("FieldAbbe", game.get("venue", ""))),
+                        "status_text": game_status,
+                        "innings": {"away": away_scores, "home": home_scores},
+                        "pitchers": pitchers,
                     })
 
-                # Determine status text
-                game_status = gd.get("GameStatusChi", "")
-                if not game_status:
-                    gs_code = gd.get("GameStatus", 0)
-                    game_status = {0: "未開始", 1: "比賽中", 2: "比賽中", 3: "比賽結束"}.get(gs_code, "")
-
-                live_games.append({
-                    "away_team_name": _to_chinese_name(gd.get("VisitingTeamName", "")),
-                    "home_team_name": _to_chinese_name(gd.get("HomeTeamName", "")),
-                    "away_score": gd.get("VisitingTotalScore", 0) or 0,
-                    "home_score": gd.get("HomeTotalScore", 0) or 0,
-                    "venue": _to_chinese_venue(gd.get("FieldAbbe", game.get("venue", ""))),
-                    "status_text": game_status,
-                    "innings": {"away": away_scores, "home": home_scores},
-                    "pitchers": pitchers,
-                })
-
-            except Exception as e:
-                logger.warning(f"Live score failed for sno {sno}: {e}")
+                except Exception as e:
+                    logger.warning(f"Live score failed for sno {sno}: {e}")
 
         finally:
             client.close()
