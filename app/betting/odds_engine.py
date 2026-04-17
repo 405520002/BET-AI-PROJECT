@@ -79,58 +79,70 @@ def _generate_two_step(games: list[dict], standings: dict) -> dict[str, dict]:
     if not design_text or len(design_text) < 100:
         raise RuntimeError("Step 1 (design) failed")
 
-    # === Step 2: Convert to JSON (Nemotron - accurate team names + clean JSON) ===
-    game_ids = [g.get("id", "") for g in games]
-    json_prompt = build_json_prompt(design_text, game_ids)
+    # === Step 2: Convert to JSON per game (one at a time for reliability) ===
+    from app.betting.odds_prompt import build_json_prompt_single
     openrouter = _get_openrouter()
+    result = {}
+
+    for game in games:
+        gid = game.get("id", "")
+        game_odds = _convert_single_game_json(openrouter, design_text, gid)
+        if game_odds:
+            result[gid] = game_odds
+        else:
+            logger.warning(f"Step 2 failed for {gid}, using fallback")
+            result[gid] = generate_fallback_odds(game, standings)
+
+    logger.info(f"Step 2 done: {sum(1 for v in result.values() if len(v.get('markets',[])) > 3)} games with AI odds")
+    return result
+
+
+def _convert_single_game_json(openrouter, design_text: str, game_id: str) -> dict | None:
+    """Convert Step 1 design to JSON for a single game."""
+    from app.betting.odds_prompt import build_json_prompt_single
+
+    prompt = build_json_prompt_single(design_text, game_id)
 
     for attempt in range(MAX_RETRIES):
+        response = None
         try:
-            logger.info(f"Step 2 (JSON) attempt {attempt + 1}/{MAX_RETRIES} with {JSON_MODEL}")
+            logger.info(f"Step 2 (JSON) {game_id} attempt {attempt + 1}/{MAX_RETRIES}")
             response = openrouter.chat.completions.create(
                 model=JSON_MODEL,
-                messages=[{"role": "user", "content": json_prompt}],
+                messages=[{"role": "user", "content": prompt}],
                 temperature=0,
-                max_tokens=8192,
+                max_tokens=2048,
             )
             json_text = response.choices[0].message.content or ""
-            # Remove thinking tags
             if "<think>" in json_text:
                 idx = json_text.rfind("</think>")
                 if idx != -1:
                     json_text = json_text[idx + 8:].strip()
 
-            odds_list = _parse_json_response(json_text)
+            parsed = _parse_json_response(json_text)
 
-            if not isinstance(odds_list, list) or len(odds_list) == 0:
-                raise ValueError("Empty response")
+            # Handle both formats: single object or array
+            if isinstance(parsed, list) and len(parsed) > 0:
+                game_data = parsed[0]
+            elif isinstance(parsed, dict):
+                game_data = parsed
+            else:
+                raise ValueError("Invalid format")
 
-            result = {}
-            for game_odds in odds_list:
-                game_id = game_odds.get("game_id", "")
-                markets = game_odds.get("markets", [])
-                validated = _validate_markets(markets)
-                if validated:
-                    result[game_id] = {"markets": validated}
+            markets = game_data.get("markets", [])
+            validated = _validate_markets(markets)
+            if validated:
+                logger.info(f"Step 2 {game_id} success: {len(validated)} markets")
+                return {"markets": validated}
 
-            if not result:
-                raise ValueError("No valid markets")
-
-            # Fill in missing games with fallback
-            for game in games:
-                gid = game.get("id", "")
-                if gid not in result:
-                    result[gid] = generate_fallback_odds(game, standings)
-
-            logger.info(f"Step 2 success: {len(result)} games with LLM odds")
-            return result
+            raise ValueError("No valid markets")
 
         except Exception as e:
-            raw = (response.choices[0].message.content or "")[:200] if response else ""
-            logger.warning(f"Step 2 (JSON) attempt {attempt + 1} failed: {e} | raw: {raw}")
+            raw = (response.choices[0].message.content or "")[:150] if response else ""
+            logger.warning(f"Step 2 {game_id} attempt {attempt + 1} failed: {e} | raw: {raw}")
             time.sleep(1)
 
-    raise RuntimeError("Step 2 (JSON via Groq) failed")
+    return None
 
 
 def _parse_json_response(text: str) -> list[dict]:

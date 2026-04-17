@@ -72,3 +72,26 @@ Rules:
 - No single quotes, only double quotes
 
 Start your response with [ immediately."""
+
+
+def build_json_prompt_single(design_text: str, game_id: str) -> str:
+    """Step 2 (single game): Convert design to JSON for one game only."""
+
+    return f"""Extract the betting markets for game ID "{game_id}" from the design below and convert to JSON.
+
+DESIGN:
+{design_text}
+
+OUTPUT - Return ONLY a valid JSON array with one object for this game. No markdown, no explanation.
+
+Format:
+[{{"game_id": "{game_id}", "markets": [{{"type": "moneyline", "name": "中文名稱", "description": "中文說明(30字內)", "options": [{{"label": "中文選項", "odds": 1.85}}]}}]}}]
+
+Rules:
+- type: moneyline, over_under, spread, or custom
+- All text in Traditional Chinese
+- odds must be numbers
+- description must be under 30 characters
+- No trailing commas
+
+Start with [ immediately."""
