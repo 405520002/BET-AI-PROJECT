@@ -1155,13 +1155,16 @@ def build_live_scores(games: list[dict]) -> dict:
             batters = g.get("batters", [])
             hitter_data = next((b for b in batters if b.get("name") == hitter_name), None)
             if hitter_data:
-                stats = f"{hitter_data.get('hits',0)}/{hitter_data.get('pa',0)}"
+                ab = hitter_data.get('ab', 0)
+                h = hitter_data.get('hits', 0)
+                bb = hitter_data.get('bb', 0)
+                stats = f"{ab}打數{h}安打"
+                if bb > 0:
+                    stats += f" {bb}保送"
                 if hitter_data.get("hr", 0) > 0:
                     stats += f" {hitter_data['hr']}轟"
                 if hitter_data.get("rbi", 0) > 0:
                     stats += f" {hitter_data['rbi']}打點"
-                if hitter_data.get("runs", 0) > 0:
-                    stats += f" {hitter_data['runs']}得分"
             else:
                 stats = "本場尚無安打"
             batter_rows.append({

@@ -501,7 +501,8 @@ def _handle_live(event, user_id: str):
                                 "rbi": int(b.get("RunBattedINCnt", 0) or 0),
                                 "runs": int(b.get("ScoreCnt", 0) or 0),
                                 "so": int(b.get("StrikeOutCnt", 0) or 0),
-                                "pa": int(b.get("PlateAppearances", 0) or 0),
+                                "ab": int(b.get("HitCnt", 0) or 0),
+                                "bb": int(b.get("BasesONBallsCnt", 0) or 0),
                             })
                     batters.sort(key=lambda x: x["hits"] + x["hr"] * 2, reverse=True)
 
