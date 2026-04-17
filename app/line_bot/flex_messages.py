@@ -1152,6 +1152,9 @@ def build_live_scores(games: list[dict]) -> dict:
 
 def build_balance(user: dict) -> dict:
     """Build balance overview card."""
+    from datetime import date
+    today = date.today().isoformat()
+
     balance = user.get("balance", 0)
     total_deposited = user.get("total_deposited", 0)
     total_wagered = user.get("total_wagered", 0)
@@ -1160,8 +1163,13 @@ def build_balance(user: dict) -> dict:
     profit_sign = "+" if total_profit >= 0 else ""
     profit_color = "#27AE60" if total_profit >= 0 else "#E74C3C"
 
-    today_deposit = user.get("deposit_today_total", 0)
-    today_bet = user.get("bet_today_total", 0)
+    # Only show today's totals if the date matches
+    today_deposit = user.get("deposit_today_total", 0) if user.get("deposit_today_date") == today else 0
+    today_bet = user.get("bet_today_total", 0) if user.get("bet_today_date") == today else 0
+
+    # 30-day deposit total
+    from app.db import tx_repo
+    month_deposit = tx_repo.sum_deposits_last_30_days(user.get("id", ""))
 
     return {
         "type": "flex",
@@ -1199,6 +1207,7 @@ def build_balance(user: dict) -> dict:
                     },
                     _kv_row("今日已儲值", f"{today_deposit:,} / 10,000"),
                     _kv_row("今日已下注", f"{today_bet:,} / 10,000"),
+                    _kv_row("30天已儲值", f"{month_deposit:,} / 100,000"),
                     {"type": "separator", "margin": "xl"},
                     # Lifetime stats
                     {
