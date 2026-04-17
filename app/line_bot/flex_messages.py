@@ -1263,6 +1263,63 @@ def build_balance(user: dict) -> dict:
     }
 
 
+def build_insufficient_balance(balance: int, amount: int) -> dict:
+    """Build insufficient balance card with deposit button."""
+    shortage = amount - balance
+    return {
+        "type": "flex",
+        "altText": "餘額不足",
+        "contents": {
+            "type": "bubble",
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {"type": "text", "text": "❌ 餘額不足", "weight": "bold", "size": "lg", "color": "#E74C3C"},
+                    {"type": "separator", "margin": "lg"},
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "margin": "lg",
+                        "spacing": "sm",
+                        "contents": [
+                            _kv_row("目前餘額", f"{balance:,} 元"),
+                            _kv_row("下注金額", f"{amount:,} 元"),
+                            _kv_row("還差", f"{shortage:,} 元"),
+                        ],
+                    },
+                ],
+            },
+            "footer": {
+                "type": "box",
+                "layout": "horizontal",
+                "spacing": "md",
+                "contents": [
+                    {
+                        "type": "button",
+                        "action": {
+                            "type": "message",
+                            "label": "去儲值",
+                            "text": "儲值",
+                        },
+                        "style": "primary",
+                        "color": "#D35400",
+                    },
+                    {
+                        "type": "button",
+                        "action": {
+                            "type": "message",
+                            "label": "查看餘額",
+                            "text": "餘額",
+                        },
+                        "style": "secondary",
+                    },
+                ],
+            },
+        },
+    }
+
+
 def build_success_message(text: str) -> dict:
     """Simple success text message."""
     return {"type": "text", "text": f"✅ {text}"}

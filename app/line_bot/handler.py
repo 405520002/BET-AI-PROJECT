@@ -636,6 +636,23 @@ def _handle_state_input(event, user_id: str, text: str, state: dict):
             _reply(event.reply_token, ["最低下注 1 元，請重新輸入:"])
             return
 
+        # Check balance before proceeding
+        user = user_repo.get_user(user_id)
+        balance = user.get("balance", 0) if user else 0
+        if balance < amount:
+            _clear_state(user_id)
+            _reply(event.reply_token, [flex_messages.build_insufficient_balance(balance, amount)])
+            return
+
+        # Check daily bet cap
+        from datetime import date as date_cls
+        today = date_cls.today().isoformat()
+        today_bet = user.get("bet_today_total", 0) if user.get("bet_today_date") == today else 0
+        if today_bet + amount > 10000:
+            remaining = 10000 - today_bet
+            _reply(event.reply_token, [f"超過每日下注上限，今日剩餘額度: {remaining:,} 元\n請重新輸入較小的金額:"])
+            return
+
         # Store amount, move to confirm state
         ctx["amount"] = amount
         _set_state(user_id, "awaiting_bet_confirm", ctx)
