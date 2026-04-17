@@ -400,12 +400,10 @@ def _handle_live(event, user_id: str):
 
     # Scrape fresh live data
     try:
-        import httpx
-        from app.scraper.http_client import _browser_headers
+        from app.scraper.http_client import get_cpbl_session_sync, _ajax_headers, _browser_headers
+        import time as _time
+        import random as _random
 
-        headers = _browser_headers("https://en.cpbl.com.tw/")
-
-        # Get today's game SNOs from DB
         today_str = now.strftime("%Y-%m-%d")
         today_games = list(db["games"].find({"date": today_str}))
 
@@ -414,38 +412,39 @@ def _handle_live(event, user_id: str):
             _reply(event.reply_token, ["今日沒有賽事"])
             return
 
-        # Get token from box page
-        r = httpx.get("https://en.cpbl.com.tw/box", headers=headers, follow_redirects=True, timeout=15)
-        token_match = re.search(r'__RequestVerificationToken.*?value="([^"]+)"', r.text)
-        if not token_match:
+        # Create session with anti-scraping
+        client = get_cpbl_session_sync("https://en.cpbl.com.tw")
+
+        try:
+            # Get token from box page
+            headers = _browser_headers("https://en.cpbl.com.tw/")
+            _time.sleep(_random.uniform(0.3, 0.8))
+            r = client.get("https://en.cpbl.com.tw/box", headers=headers)
+
             token_match = re.search(r"RequestVerificationToken:\s*'([A-Za-z0-9_\-:]+)'", r.text)
-        token = token_match.group(1) if token_match else ""
+            if not token_match:
+                token_match = re.search(r'__RequestVerificationToken.*?value="([^"]+)"', r.text)
+            token = token_match.group(1) if token_match else ""
 
-        live_games = []
-        for game in today_games:
-            sno = game.get("game_sno")
-            if not sno:
-                continue
-
-            try:
-                r2 = httpx.post(
-                    "https://en.cpbl.com.tw/box/getlive",
-                    data={"gameSno": str(sno), "year": str(now.year), "kindCode": "A"},
-                    headers={
-                        **headers,
-                        "RequestVerificationToken": token,
-                        "X-Requested-With": "XMLHttpRequest",
-                        "Content-Type": "application/x-www-form-urlencoded",
-                    },
-                    cookies=dict(r.cookies),
-                    follow_redirects=True,
-                    timeout=15,
-                )
-
-                if r2.status_code != 200:
+            live_games = []
+            for game in today_games:
+                sno = game.get("game_sno")
+                if not sno:
                     continue
 
-                data = r2.json()
+                try:
+                    ajax_h = _ajax_headers("https://en.cpbl.com.tw/box", token)
+                    _time.sleep(_random.uniform(0.3, 0.8))
+                    r2 = client.post(
+                        "https://en.cpbl.com.tw/box/getlive",
+                        data={"gameSno": str(sno), "year": str(now.year), "kindCode": "A"},
+                        headers=ajax_h,
+                    )
+
+                    if r2.status_code != 200:
+                        continue
+
+                    data = r2.json()
                 gd_raw = data.get("GameDetailJson") or "[]"
                 gd_list = json.loads(gd_raw) if isinstance(gd_raw, str) else (gd_raw or [])
                 if not gd_list:
@@ -501,6 +500,9 @@ def _handle_live(event, user_id: str):
 
             except Exception as e:
                 logger.warning(f"Live score failed for sno {sno}: {e}")
+
+        finally:
+            client.close()
 
         # Cache for 2 min
         db["cache"].update_one(
