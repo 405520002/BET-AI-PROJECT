@@ -1128,23 +1128,25 @@ def build_live_scores(games: list[dict]) -> dict:
                 },
             ]
 
-        # Pitchers - only show the pitching team, mark current pitcher with 🔴
+        # Pitchers - show both teams, mark current pitcher with 🔴
         pitchers = g.get("pitchers", [])
         pitcher_rows = []
-        pitching_team_pitchers = [p for p in pitchers if p.get("team") == pitching_side] if pitching_side else pitchers
-        if not pitching_team_pitchers:
-            pitching_team_pitchers = pitchers  # fallback show all
 
-        for p in pitching_team_pitchers:
-            name = p.get("name", "") or "---"
-            is_current = (name == current_ab.get("pitcher", ""))
-            dot = "🔴 " if is_current else "   "
-            role = f"({p.get('role','')})" if p.get("role") else ""
-            speed = f" {p['max_speed']}km" if p.get("max_speed", 0) > 0 else ""
-            text = f"{dot}{name}{role} {p.get('ip','')}局 {p.get('k',0)}K {p.get('er',0)}ER"
-            pitches = f"     {p.get('pitches',0)}球({p.get('strikes',0)}好{p.get('balls',0)}壞){speed}"
-            pitcher_rows.append({"type": "text", "text": text, "size": "xxs", "color": "#FFFFFF" if is_current else "#CCCCCC"})
-            pitcher_rows.append({"type": "text", "text": pitches, "size": "xxs", "color": "#888888"})
+        for side_key, side_label in [("away", "客"), ("home", "主")]:
+            side_pitchers = [p for p in pitchers if p.get("team") == side_key]
+            if not side_pitchers:
+                continue
+            pitcher_rows.append({"type": "text", "text": f"[{side_label}]", "size": "xxs", "color": "#888888", "margin": "sm"})
+            for p in side_pitchers:
+                name = p.get("name", "") or "---"
+                is_current = (name == current_ab.get("pitcher", ""))
+                dot = "🔴 " if is_current else "    "
+                role = f"({p.get('role','')})" if p.get("role") else ""
+                speed = f" {p['max_speed']}km" if p.get("max_speed", 0) > 0 else ""
+                text = f"{dot}{name}{role} {p.get('ip','')}局 {p.get('k',0)}K {p.get('er',0)}ER"
+                pitches = f"      {p.get('pitches',0)}球({p.get('strikes',0)}好{p.get('balls',0)}壞){speed}"
+                pitcher_rows.append({"type": "text", "text": text, "size": "xxs", "color": "#FFFFFF" if is_current else "#CCCCCC"})
+                pitcher_rows.append({"type": "text", "text": pitches, "size": "xxs", "color": "#888888"})
 
         # Current batter stats
         batter_rows = []
@@ -1209,8 +1211,7 @@ def build_live_scores(games: list[dict]) -> dict:
                     {"type": "separator", "margin": "sm", "color": "#333333"},
                     # Pitchers
                     *(
-                        [{"type": "text", "text": f"{'主' if pitching_side == 'home' else '客'}隊投手" if pitching_side else "投手",
-                          "size": "xs", "color": "#3498DB", "weight": "bold", "margin": "md"}]
+                        [{"type": "text", "text": "投手", "size": "xs", "color": "#3498DB", "weight": "bold", "margin": "md"}]
                         + pitcher_rows if pitcher_rows else []
                     ),
                     {"type": "separator", "margin": "sm", "color": "#333333"},
