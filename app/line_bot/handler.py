@@ -556,23 +556,8 @@ def _handle_my_bets(event, user_id: str):
 
 
 def _handle_help(event):
-    _reply(event.reply_token, [
-        "🏟️ CPBL 虛擬下注 使用說明\n\n"
-        "【指令】\n"
-        "今日賽事 - 查看今天的比賽和下注盤口\n"
-        "儲值 - 儲值虛擬幣到帳戶\n"
-        "我的戰績 - 查看餘額、勝率、獲利\n"
-        "排行榜 - 獲利前 10 名 + 莊家獲利\n"
-        "我的注單 - 查看最近下注紀錄\n"
-        "球隊戰績 - CPBL 即時戰績排名\n\n"
-        "【規則】\n"
-        "• 儲值上限: 每日 10,000 / 30天 100,000\n"
-        "• 下注上限: 每日 10,000，最低 1 元\n"
-        "• 餘額不足不能下注\n"
-        "• 延賽全額退款\n"
-        "• 每日午夜自動結算\n\n"
-        "⚾ 賠率由 AI 根據當日數據動態生成！"
-    ])
+    msg = flex_messages.build_help()
+    _reply(event.reply_token, [msg])
 
 
 # --- Bet Flow ---

@@ -1343,6 +1343,118 @@ def build_insufficient_balance(balance: int, amount: int) -> dict:
     }
 
 
+def build_help() -> dict:
+    """Build help as carousel - one card per feature."""
+    features = [
+        {
+            "title": "🏟️ 今日賽事",
+            "command": "今日賽事",
+            "color": "#2C3E50",
+            "desc": "查看今天的 CPBL 比賽，每場有 AI 動態生成的下注盤口。點擊賠率按鈕即可下注。",
+        },
+        {
+            "title": "⚡ 即時賽事",
+            "command": "即時賽事",
+            "color": "#C0392B",
+            "desc": "查看進行中的比賽即時比分，包含逐局分數和投手數據。每 2 分鐘可查詢一次。",
+        },
+        {
+            "title": "📋 近期賽果",
+            "command": "近期賽果",
+            "color": "#34495E",
+            "desc": "查看近 3 天已完成的比賽結果，含比分和球隊 logo。",
+        },
+        {
+            "title": "📅 未來賽事",
+            "command": "未來賽事",
+            "color": "#616A6B",
+            "desc": "查看未來 7 天的賽程表，包含對戰組合、球場和開賽時間。",
+        },
+        {
+            "title": "📊 球隊戰績",
+            "command": "球隊戰績",
+            "color": "#1A5276",
+            "desc": "查看 CPBL 即時排名，含勝敗、勝率、團隊 ERA 和近 10 場戰績。",
+        },
+        {
+            "title": "💰 儲值",
+            "command": "儲值",
+            "color": "#D35400",
+            "desc": "儲值虛擬幣到帳戶。\n• 每日上限: 10,000\n• 30天上限: 100,000",
+        },
+        {
+            "title": "💵 餘額",
+            "command": "餘額",
+            "color": "#2C3E50",
+            "desc": "查看帳戶餘額、今日額度使用狀況、30天儲值額度和累計損益。",
+        },
+        {
+            "title": "🎰 下注規則",
+            "command": "今日賽事",
+            "color": "#8E44AD",
+            "desc": "• 每日下注上限: 10,000\n• 最低下注: 1 元\n• 餘額不足不能下注\n• 開賽後封盤\n• 延賽全額退款\n• 每日午夜自動結算",
+        },
+        {
+            "title": "📑 我的注單",
+            "command": "我的注單",
+            "color": "#2471A3",
+            "desc": "查看最近的下注紀錄，含結算狀態和結算理由。",
+        },
+        {
+            "title": "🏆 排行榜",
+            "command": "排行榜",
+            "color": "#8E44AD",
+            "desc": "查看獲利 TOP 10 排名、你的排名和莊家獲利。",
+        },
+    ]
+
+    bubbles = []
+    for f in features:
+        bubbles.append({
+            "type": "bubble",
+            "size": "kilo",
+            "header": {
+                "type": "box",
+                "layout": "vertical",
+                "backgroundColor": f["color"],
+                "paddingAll": "15px",
+                "contents": [
+                    {"type": "text", "text": f["title"], "color": "#FFFFFF", "weight": "bold", "size": "lg"},
+                ],
+            },
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "paddingAll": "15px",
+                "contents": [
+                    {"type": "text", "text": f["desc"], "size": "sm", "color": "#555555", "wrap": True},
+                ],
+            },
+            "footer": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "button",
+                        "action": {"type": "message", "label": f["command"], "text": f["command"]},
+                        "style": "primary",
+                        "color": f["color"],
+                        "height": "sm",
+                    },
+                ],
+            },
+        })
+
+    return {
+        "type": "flex",
+        "altText": "使用說明",
+        "contents": {
+            "type": "carousel",
+            "contents": bubbles[:10],
+        },
+    }
+
+
 def build_success_message(text: str) -> dict:
     """Simple success text message."""
     return {"type": "text", "text": f"✅ {text}"}
