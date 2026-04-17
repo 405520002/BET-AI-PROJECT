@@ -145,19 +145,43 @@ async def midday_update():
 
 
 async def midnight_settle():
-    """00:00 - Scrape today's results and settle all bets."""
+    """00:00 - Scrape today's results + boxscores and settle all bets."""
+    from app.scraper.cpbl_boxscore import scrape_boxscore
+    import time
+    import random
+
     today = date.today().isoformat()
     logger.info(f"[00:00] Scraping results and settling for {today}")
 
-    # Step 1: Scrape results
+    # Step 1: Scrape basic results (updates game status to final/postponed)
     results_updated = await _scrape_and_update_results(today)
     logger.info(f"[00:00] Updated {results_updated} game results")
 
-    # Step 2: Settle all bets
-    settle_result = settle_all_games_for_date(today)
+    # Step 2: Scrape boxscores for completed games
+    games = game_repo.get_games_by_date(today)
+    final_games = [g for g in games if g.get("status") == "final"]
+    boxscores = {}
+
+    for game in final_games:
+        game_sno = game.get("game_sno")
+        if not game_sno:
+            continue
+        try:
+            time.sleep(random.uniform(1, 2))
+            bs = await scrape_boxscore(game_sno)
+            if bs:
+                boxscores[game["id"]] = bs
+                logger.info(f"[00:00] Boxscore {game['id']}: {bs.get('away_score',0)}-{bs.get('home_score',0)}, HR:{bs.get('total_hr',0)}, 1st:{bs.get('first_inning_runs',0)}")
+        except Exception as e:
+            logger.warning(f"[00:00] Boxscore failed for {game['id']}: {e}")
+
+    logger.info(f"[00:00] Got {len(boxscores)} boxscores")
+
+    # Step 3: Settle all bets (with boxscores for custom bets)
+    settle_result = settle_all_games_for_date(today, boxscores)
     logger.info(f"[00:00] Settlement: {settle_result}")
 
-    return {"results_updated": results_updated, **settle_result}
+    return {"results_updated": results_updated, "boxscores": len(boxscores), **settle_result}
 
 
 # === Helpers ===
