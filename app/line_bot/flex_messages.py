@@ -1129,34 +1129,12 @@ def build_live_scores(games: list[dict]) -> dict:
                                 "weight": "bold",
                             },
                             {"type": "filler"},
-                            {"type": "text", "text": g.get("venue", ""), "size": "xxs", "color": "#888888", "align": "end"},
+                            {"type": "text", "text": g.get("venue", "") or " ", "size": "xxs", "color": "#888888", "align": "end"},
                         ],
                     },
                     {"type": "separator", "margin": "md", "color": "#333333"},
-                    # Inning header
-                    {
-                        "type": "box", "layout": "horizontal", "margin": "md",
-                        "contents": [
-                            {"type": "text", "text": "", "size": "xxs", "flex": 3},
-                            *header_cells,
-                        ],
-                    },
-                    # Away team row
-                    {
-                        "type": "box", "layout": "horizontal", "margin": "sm",
-                        "contents": [
-                            {"type": "text", "text": away, "size": "xs", "color": "#FFFFFF", "flex": 3, "weight": "bold"},
-                            *away_cells,
-                        ],
-                    },
-                    # Home team row
-                    {
-                        "type": "box", "layout": "horizontal", "margin": "sm",
-                        "contents": [
-                            {"type": "text", "text": home, "size": "xs", "color": "#FFFFFF", "flex": 3, "weight": "bold"},
-                            *home_cells,
-                        ],
-                    },
+                    # Scoreboard rows (inning-by-inning or simple score)
+                    *scoreboard_rows,
                     {"type": "separator", "margin": "md", "color": "#333333"},
                     # Pitcher info
                     *(
