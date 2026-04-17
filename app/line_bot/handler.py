@@ -155,6 +155,8 @@ def handle_text_message(event: MessageEvent):
         _handle_stats(event, user_id)
     elif cmd == "my_bets":
         _handle_my_bets(event, user_id)
+    elif cmd == "balance":
+        _handle_balance(event, user_id)
     elif cmd == "standings":
         _handle_standings(event)
     elif cmd == "recent_results":
@@ -235,6 +237,15 @@ def _handle_games(event, user_id: str):
 
     carousel = flex_messages.build_games_carousel(scheduled)
     _reply(event.reply_token, [carousel])
+
+
+def _handle_balance(event, user_id: str):
+    user = user_repo.get_user(user_id)
+    if not user:
+        _reply(event.reply_token, [flex_messages.build_error_message("請先加入好友")])
+        return
+    msg = flex_messages.build_balance(user)
+    _reply(event.reply_token, [msg])
 
 
 def _handle_deposit_menu(event, user_id: str):

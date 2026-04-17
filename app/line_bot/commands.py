@@ -22,6 +22,7 @@ COMMANDS = {
     "球隊戰績": "standings",
     "戰績表": "standings",
     "聯盟戰績": "standings",
+    "餘額": "balance",
     "近期賽果": "recent_results",
     "賽果": "recent_results",
     "比賽結果": "recent_results",

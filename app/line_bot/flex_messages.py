@@ -1150,6 +1150,110 @@ def build_live_scores(games: list[dict]) -> dict:
     }
 
 
+def build_balance(user: dict) -> dict:
+    """Build balance overview card."""
+    balance = user.get("balance", 0)
+    total_deposited = user.get("total_deposited", 0)
+    total_wagered = user.get("total_wagered", 0)
+    total_won = user.get("total_won", 0)
+    total_profit = user.get("total_profit", 0)
+    profit_sign = "+" if total_profit >= 0 else ""
+    profit_color = "#27AE60" if total_profit >= 0 else "#E74C3C"
+
+    today_deposit = user.get("deposit_today_total", 0)
+    today_bet = user.get("bet_today_total", 0)
+
+    return {
+        "type": "flex",
+        "altText": "餘額",
+        "contents": {
+            "type": "bubble",
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    # Balance header
+                    {
+                        "type": "text",
+                        "text": "帳戶餘額",
+                        "size": "sm",
+                        "color": "#888888",
+                    },
+                    {
+                        "type": "text",
+                        "text": f"${balance:,}",
+                        "size": "3xl",
+                        "weight": "bold",
+                        "color": "#333333",
+                        "margin": "sm",
+                    },
+                    {"type": "separator", "margin": "xl"},
+                    # Today's limits
+                    {
+                        "type": "text",
+                        "text": "今日額度",
+                        "size": "sm",
+                        "color": "#888888",
+                        "margin": "xl",
+                        "weight": "bold",
+                    },
+                    _kv_row("今日已儲值", f"{today_deposit:,} / 10,000"),
+                    _kv_row("今日已下注", f"{today_bet:,} / 10,000"),
+                    {"type": "separator", "margin": "xl"},
+                    # Lifetime stats
+                    {
+                        "type": "text",
+                        "text": "累計紀錄",
+                        "size": "sm",
+                        "color": "#888888",
+                        "margin": "xl",
+                        "weight": "bold",
+                    },
+                    _kv_row("累計儲值", f"{total_deposited:,} 元"),
+                    _kv_row("累計下注", f"{total_wagered:,} 元"),
+                    _kv_row("累計獎金", f"{total_won:,} 元"),
+                    {
+                        "type": "box",
+                        "layout": "horizontal",
+                        "contents": [
+                            {"type": "text", "text": "累計損益", "size": "sm", "color": "#888888", "flex": 2},
+                            {"type": "text", "text": f"{profit_sign}{total_profit:,} 元",
+                             "size": "sm", "color": profit_color, "align": "end", "weight": "bold", "flex": 3},
+                        ],
+                    },
+                ],
+            },
+            "footer": {
+                "type": "box",
+                "layout": "horizontal",
+                "spacing": "md",
+                "contents": [
+                    {
+                        "type": "button",
+                        "action": {
+                            "type": "message",
+                            "label": "儲值",
+                            "text": "儲值",
+                        },
+                        "style": "primary",
+                        "color": "#D35400",
+                    },
+                    {
+                        "type": "button",
+                        "action": {
+                            "type": "message",
+                            "label": "今日賽事",
+                            "text": "今日賽事",
+                        },
+                        "style": "primary",
+                        "color": "#2C3E50",
+                    },
+                ],
+            },
+        },
+    }
+
+
 def build_success_message(text: str) -> dict:
     """Simple success text message."""
     return {"type": "text", "text": f"✅ {text}"}
