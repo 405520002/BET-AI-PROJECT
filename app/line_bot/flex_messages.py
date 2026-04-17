@@ -1146,29 +1146,27 @@ def build_live_scores(games: list[dict]) -> dict:
             pitcher_rows.append({"type": "text", "text": text, "size": "xxs", "color": "#FFFFFF" if is_current else "#CCCCCC"})
             pitcher_rows.append({"type": "text", "text": pitches, "size": "xxs", "color": "#888888"})
 
-        # Batters - only show the batting team
-        batters = g.get("batters", [])
-        batting_team_batters = [b for b in batters if b.get("team") == batting_side] if batting_side else batters
-        if not batting_team_batters:
-            batting_team_batters = batters[:4]
-
+        # Current batter stats
         batter_rows = []
-        for b in batting_team_batters[:5]:
-            name = b.get("name", "") or "---"
-            stats = f"{b.get('hits',0)}/{b.get('pa',0)}"
-            if b.get("hr", 0) > 0:
-                stats += f" {b['hr']}轟"
-            if b.get("rbi", 0) > 0:
-                stats += f" {b['rbi']}打點"
-            if b.get("runs", 0) > 0:
-                stats += f" {b['runs']}得分"
-            batter_rows.append({
-                "type": "box", "layout": "horizontal",
-                "contents": [
-                    {"type": "text", "text": name, "size": "xxs", "color": "#CCCCCC", "flex": 3},
-                    {"type": "text", "text": stats, "size": "xxs", "color": "#FFFFFF", "align": "end", "flex": 4},
-                ],
-            })
+        if current_ab.get("hitter"):
+            hitter_name = current_ab["hitter"]
+            batters = g.get("batters", [])
+            hitter_data = next((b for b in batters if b.get("name") == hitter_name), None)
+            if hitter_data:
+                stats = f"{hitter_data.get('hits',0)}/{hitter_data.get('pa',0)}"
+                if hitter_data.get("hr", 0) > 0:
+                    stats += f" {hitter_data['hr']}轟"
+                if hitter_data.get("rbi", 0) > 0:
+                    stats += f" {hitter_data['rbi']}打點"
+                if hitter_data.get("runs", 0) > 0:
+                    stats += f" {hitter_data['runs']}得分"
+                batter_rows.append({
+                    "type": "box", "layout": "horizontal",
+                    "contents": [
+                        {"type": "text", "text": f"🏏 {hitter_name}", "size": "xs", "color": "#E74C3C", "flex": 3},
+                        {"type": "text", "text": stats, "size": "xs", "color": "#FFFFFF", "align": "end", "flex": 4, "weight": "bold"},
+                    ],
+                })
 
         # Weather + audience
         weather = g.get("weather", "")
@@ -1216,10 +1214,9 @@ def build_live_scores(games: list[dict]) -> dict:
                         + pitcher_rows if pitcher_rows else []
                     ),
                     {"type": "separator", "margin": "sm", "color": "#333333"},
-                    # Batters
+                    # Current batter
                     *(
-                        [{"type": "text", "text": f"{'主' if batting_side == 'home' else '客'}隊打擊" if batting_side else "打擊",
-                          "size": "xs", "color": "#E74C3C", "weight": "bold", "margin": "md"}]
+                        [{"type": "text", "text": "打席中", "size": "xs", "color": "#E74C3C", "weight": "bold", "margin": "md"}]
                         + batter_rows if batter_rows else []
                     ),
                 ],

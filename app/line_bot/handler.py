@@ -384,21 +384,9 @@ def _handle_live(event, user_id: str):
         _reply(event.reply_token, [flex_messages.build_error_message(f"請等 {remaining} 秒後再查詢即時比分")])
         return
 
-    # Check DB cache first (shared across users, 2 min TTL)
     db = get_db()
-    cached = db["cache"].find_one({"_id": "live_scores"})
-    if cached and cached.get("updated_at"):
-        cache_age = (now - cached["updated_at"]).total_seconds()
-        if cache_age < 120 and cached.get("data"):
-            _live_rate_limit[user_id] = now
-            msg = flex_messages.build_live_scores(cached["data"])
-            _reply(event.reply_token, [msg])
-            return
-        elif cache_age < 120 and not cached.get("data"):
-            _reply(event.reply_token, ["目前沒有進行中的比賽"])
-            return
 
-    # Reply immediately, then push results (scraping takes time)
+    # Reply immediately (scraping takes time)
     _reply(event.reply_token, ["⚾ 查詢即時比分中..."])
 
     # Scrape fresh live data
@@ -606,11 +594,28 @@ def _handle_live(event, user_id: str):
 
     except Exception as e:
         logger.error(f"Live score error: {e}")
+        # Fallback to cache
         try:
-            from linebot.v3.messaging import PushMessageRequest, TextMessage as TM
-            _get_api().push_message(PushMessageRequest(
-                to=user_id, messages=[TM(text="❌ 無法取得即時比分")]
-            ))
+            from linebot.v3.messaging import (
+                PushMessageRequest, FlexMessage, FlexContainer, TextMessage as TM,
+            )
+            cached = db["cache"].find_one({"_id": "live_scores"})
+            if cached and cached.get("data"):
+                cache_age = int((now - cached["updated_at"]).total_seconds()) if cached.get("updated_at") else 0
+                cache_min = cache_age // 60
+                msg_data = flex_messages.build_live_scores(cached["data"])
+                _get_api().push_message(PushMessageRequest(
+                    to=user_id,
+                    messages=[
+                        TM(text=f"📡 以下為 {cache_min} 分鐘前的比分，最新數據稍後更新"),
+                        FlexMessage(alt_text="即時比分(快取)", contents=FlexContainer.from_dict(msg_data["contents"])),
+                    ],
+                ))
+                _live_rate_limit[user_id] = now
+            else:
+                _get_api().push_message(PushMessageRequest(
+                    to=user_id, messages=[TM(text="❌ 無法取得即時比分")]
+                ))
         except Exception:
             pass
 
