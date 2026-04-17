@@ -267,10 +267,33 @@ def build_bet_confirm(game: dict, market_name: str, selection: str, odds: float,
                     },
                     {
                         "type": "text",
-                        "text": "請輸入下注金額:",
+                        "text": "請輸入下注金額或選擇:",
                         "size": "md",
                         "margin": "lg",
                         "weight": "bold",
+                    },
+                    # Quick amount buttons
+                    {
+                        "type": "box",
+                        "layout": "horizontal",
+                        "margin": "lg",
+                        "spacing": "sm",
+                        "contents": [
+                            _quick_bet_button(100),
+                            _quick_bet_button(500),
+                            _quick_bet_button(1000),
+                        ],
+                    },
+                    {
+                        "type": "box",
+                        "layout": "horizontal",
+                        "margin": "sm",
+                        "spacing": "sm",
+                        "contents": [
+                            _quick_bet_button(3000),
+                            _quick_bet_button(5000),
+                            _quick_bet_button(10000),
+                        ],
                     },
                 ],
             },
@@ -1340,6 +1363,20 @@ def _kv_row(key: str, value: str) -> dict:
             {"type": "text", "text": key, "size": "sm", "color": "#888888", "flex": 2},
             {"type": "text", "text": value, "size": "sm", "color": "#333333", "align": "end", "flex": 3},
         ],
+    }
+
+
+def _quick_bet_button(amount: int) -> dict:
+    return {
+        "type": "button",
+        "action": {
+            "type": "message",
+            "label": f"{amount:,}",
+            "text": str(amount),
+        },
+        "style": "secondary",
+        "height": "sm",
+        "flex": 1,
     }
 
 
