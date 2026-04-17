@@ -241,95 +241,77 @@ def _push_post_game_analysis(date_str: str, boxscores: dict, games: list[dict]):
 
 
 def _generate_game_summaries(games: list[dict], boxscores: dict) -> dict[str, str]:
-    """Use AI to generate post-game summary for each game. Returns {game_id: summary_text}."""
+    """Use AI to generate post-game summary per game. Returns {game_id: summary_text}."""
     from openai import OpenAI
     from app.config import settings
-    import json
+    import time
+    import random
 
     summaries = {}
+    client = OpenAI(api_key=settings.openrouter_api_key, base_url="https://openrouter.ai/api/v1")
 
-    # Build one prompt for all games
-    games_text = ""
-    game_ids = []
     for game in games:
         gid = game.get("id", "")
         bs = boxscores.get(gid)
         if not bs:
             continue
-        game_ids.append(gid)
 
         away = game.get("away_team_name", "")
         home = game.get("home_team_name", "")
 
-        # Full boxscore data
+        # Build boxscore text
         batters_text = ""
         for b in bs.get("batting_summary", []):
-            side = "主" if b.get("team") == "home" else "客"
-            batters_text += f"  {side} {b.get('name','')}: {b.get('hits',0)}安 {b.get('hr',0)}轟 {b.get('rbi',0)}打點\n"
+            side = home if b.get("team") == "home" else away
+            stats = f"{b.get('hits',0)}安"
+            if b.get("hr", 0) > 0:
+                stats += f" {b['hr']}轟"
+            if b.get("rbi", 0) > 0:
+                stats += f" {b['rbi']}打點"
+            batters_text += f"  {side} {b.get('name','')}: {stats}\n"
 
         pitchers_text = ""
         for p in bs.get("pitchers", []):
-            side = "主" if p.get("team") == "home" else "客"
-            pitchers_text += f"  {side} {p.get('name','')}: {p.get('ip','0.0')}局 {p.get('strikeouts',0)}K {p.get('earned_runs',0)}自責分 {p.get('hits_allowed',0)}被安 {p.get('walks',0)}保送\n"
+            side = home if p.get("team") == "home" else away
+            pitchers_text += (
+                f"  {side} {p.get('name','')}: {p.get('ip','0.0')}局 "
+                f"{p.get('strikeouts',0)}K {p.get('earned_runs',0)}自責分 "
+                f"{p.get('hits_allowed',0)}被安 {p.get('walks',0)}保送\n"
+            )
 
-        games_text += f"""
-=== {gid}: {away} {bs.get('away_score',0)} : {bs.get('home_score',0)} {home} ===
-首局得分: {bs.get('first_inning_runs',0)}
-全壘打: {bs.get('total_hr',0)}
-勝分差: {bs.get('winning_margin',0)}
-
-打擊:
-{batters_text}
-投手:
-{pitchers_text}
-"""
-
-    if not game_ids:
-        return summaries
-
-    prompt = f"""You are a CPBL baseball analyst. Write a brief post-game summary for each game below.
-
-Requirements:
-- Write in Traditional Chinese (繁體中文)
-- Each summary should be 2-3 sentences, around 80-120 characters
-- Highlight: who was the key player, what was the turning point, notable stats
-- Tone: professional sports commentary, concise and insightful
-- Foreign player names: use their common Chinese translated name if known, otherwise transliterate
-
-Games:
-{games_text}
-
-Return a JSON object where keys are game IDs and values are the summary text.
-Example: {{"{game_ids[0]}": "台鋼雄鷹靠著..."}}
-
-Return ONLY the JSON object. No markdown, no explanation. Start with {{ immediately."""
-
-    try:
-        client = OpenAI(
-            api_key=settings.openrouter_api_key,
-            base_url="https://openrouter.ai/api/v1",
+        boxscore_text = (
+            f"{away} {bs.get('away_score',0)} : {bs.get('home_score',0)} {home}\n"
+            f"首局得分: {bs.get('first_inning_runs',0)}\n"
+            f"全壘打: {bs.get('total_hr',0)}\n"
+            f"勝分差: {bs.get('winning_margin',0)}\n\n"
+            f"打擊:\n{batters_text}\n投手:\n{pitchers_text}"
         )
-        response = client.chat.completions.create(
-            model="nvidia/nemotron-3-super-120b-a12b:free",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.7,
-            max_tokens=2048,
-        )
-        text = response.choices[0].message.content or ""
-        if "<think>" in text:
-            text = text[text.rfind("</think>") + 8:].strip()
-        if "```" in text:
-            text = text.split("```json")[-1].split("```")[0].strip() if "```json" in text else text.split("```")[1].split("```")[0].strip()
 
-        start = text.find("{")
-        end = text.rfind("}")
-        if start != -1 and end != -1:
-            text = text[start:end + 1]
+        prompt = f"""你是中華職棒球評「TAKAMEI」，請針對這場比賽寫一段賽後評論。
 
-        summaries = json.loads(text)
-        logger.info(f"[00:00] AI generated {len(summaries)} game summaries")
-    except Exception as e:
-        logger.warning(f"[00:00] AI summary failed: {e}")
+要求：
+- 繁體中文，2-3句話，80-120字
+- 語氣專業簡潔，像體育主播
+- 點出關鍵球員、比賽轉折點、值得注意的數據
+- 直接寫評論，不要加標題或格式符號
+
+比賽數據：
+{boxscore_text}"""
+
+        try:
+            response = client.chat.completions.create(
+                model="arcee-ai/trinity-large-preview:free",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+                max_tokens=300,
+            )
+            text = (response.choices[0].message.content or "").strip()
+            if text and len(text) > 20:
+                summaries[gid] = text
+                logger.info(f"[00:00] TAKAMEI summary for {gid}: {len(text)} chars")
+            time.sleep(random.uniform(1, 2))
+        except Exception as e:
+            logger.warning(f"[00:00] TAKAMEI summary failed for {gid}: {e}")
 
     return summaries
 
