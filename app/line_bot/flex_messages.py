@@ -1049,45 +1049,49 @@ def build_live_scores(games: list[dict]) -> dict:
 
         away_innings = innings.get("away", [])
         home_innings = innings.get("home", [])
-        max_inn = max(len(away_innings), len(home_innings), 1)
+        has_innings = len(away_innings) > 0 or len(home_innings) > 0
 
-        # Build inning header row: 1 2 3 4 5 6 7 8 9 R
-        header_cells = []
-        for i in range(1, max_inn + 1):
-            header_cells.append({
-                "type": "text", "text": str(i), "size": "xxs", "color": "#999999",
-                "align": "center", "flex": 1,
-            })
-        header_cells.append({
-            "type": "text", "text": "R", "size": "xxs", "color": "#FFFFFF",
-            "align": "center", "flex": 1, "weight": "bold",
-        })
+        # Build scoreboard rows only if we have inning data
+        scoreboard_rows = []
+        if has_innings:
+            max_inn = max(len(away_innings), len(home_innings), 1)
 
-        # Away score row
-        away_cells = []
-        for i in range(max_inn):
-            score = str(away_innings[i]) if i < len(away_innings) else "-"
-            away_cells.append({
-                "type": "text", "text": score, "size": "xxs", "color": "#CCCCCC",
-                "align": "center", "flex": 1,
-            })
-        away_cells.append({
-            "type": "text", "text": str(away_score), "size": "sm", "color": "#FFFFFF",
-            "align": "center", "flex": 1, "weight": "bold",
-        })
+            header_cells = []
+            for i in range(1, max_inn + 1):
+                header_cells.append({"type": "text", "text": str(i), "size": "xxs", "color": "#999999", "align": "center", "flex": 1})
+            header_cells.append({"type": "text", "text": "R", "size": "xxs", "color": "#FFFFFF", "align": "center", "flex": 1, "weight": "bold"})
 
-        # Home score row
-        home_cells = []
-        for i in range(max_inn):
-            score = str(home_innings[i]) if i < len(home_innings) else "-"
-            home_cells.append({
-                "type": "text", "text": score, "size": "xxs", "color": "#CCCCCC",
-                "align": "center", "flex": 1,
-            })
-        home_cells.append({
-            "type": "text", "text": str(home_score), "size": "sm", "color": "#FFFFFF",
-            "align": "center", "flex": 1, "weight": "bold",
-        })
+            away_cells = []
+            for i in range(max_inn):
+                score = str(away_innings[i]) if i < len(away_innings) else "-"
+                away_cells.append({"type": "text", "text": score, "size": "xxs", "color": "#CCCCCC", "align": "center", "flex": 1})
+            away_cells.append({"type": "text", "text": str(away_score), "size": "sm", "color": "#FFFFFF", "align": "center", "flex": 1, "weight": "bold"})
+
+            home_cells = []
+            for i in range(max_inn):
+                score = str(home_innings[i]) if i < len(home_innings) else "-"
+                home_cells.append({"type": "text", "text": score, "size": "xxs", "color": "#CCCCCC", "align": "center", "flex": 1})
+            home_cells.append({"type": "text", "text": str(home_score), "size": "sm", "color": "#FFFFFF", "align": "center", "flex": 1, "weight": "bold"})
+
+            scoreboard_rows = [
+                {"type": "box", "layout": "horizontal", "margin": "md", "contents": [{"type": "text", "text": "", "size": "xxs", "flex": 3}] + header_cells},
+                {"type": "box", "layout": "horizontal", "margin": "sm", "contents": [{"type": "text", "text": away, "size": "xs", "color": "#FFFFFF", "flex": 3, "weight": "bold"}] + away_cells},
+                {"type": "box", "layout": "horizontal", "margin": "sm", "contents": [{"type": "text", "text": home, "size": "xs", "color": "#FFFFFF", "flex": 3, "weight": "bold"}] + home_cells},
+            ]
+        else:
+            # Simple score display when no inning data
+            scoreboard_rows = [
+                {
+                    "type": "box", "layout": "horizontal", "margin": "lg",
+                    "contents": [
+                        {"type": "text", "text": away, "size": "md", "color": "#CCCCCC", "flex": 3, "weight": "bold"},
+                        {"type": "text", "text": str(away_score), "size": "xxl", "color": "#FFFFFF", "weight": "bold", "align": "center", "flex": 1},
+                        {"type": "text", "text": ":", "size": "lg", "color": "#888888", "align": "center", "flex": 1},
+                        {"type": "text", "text": str(home_score), "size": "xxl", "color": "#FFFFFF", "weight": "bold", "align": "center", "flex": 1},
+                        {"type": "text", "text": home, "size": "md", "color": "#CCCCCC", "align": "end", "flex": 3, "weight": "bold"},
+                    ],
+                },
+            ]
 
         # Pitchers info
         pitchers = g.get("pitchers", [])

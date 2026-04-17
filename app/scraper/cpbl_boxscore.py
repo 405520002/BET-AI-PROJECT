@@ -95,12 +95,12 @@ def _parse_boxscore(data: dict) -> dict:
     home_innings = {}
     away_innings = {}
     for item in sb_list:
-        inning = item.get("Inning", 0)
-        score = item.get("Score", 0) or 0
-        vh_type = item.get("VisitingHomeType", 0)  # 1=away, 2=home
-        if vh_type == 1:
+        inning = int(float(item.get("InningSeq", 0) or item.get("Inning", 0)))
+        score = int(item.get("Score", 0) or 0)
+        vh_type = str(item.get("VisitingHomeType", "0"))
+        if vh_type == "1":
             away_innings[inning] = score
-        elif vh_type == 2:
+        elif vh_type == "2":
             home_innings[inning] = score
 
     # First inning runs
@@ -117,7 +117,7 @@ def _parse_boxscore(data: dict) -> dict:
         if hr > 0 or (b.get("HittingCnt", 0) or 0) > 0:
             result["batting_summary"].append({
                 "name": b.get("HitterName", ""),
-                "team": "home" if b.get("VisitingHomeType") == 2 else "away",
+                "team": "home" if str(b.get("VisitingHomeType", "0")) == "2" else "away",
                 "hits": b.get("HittingCnt", 0) or 0,
                 "hr": hr,
                 "rbi": b.get("RunBattedInCnt", 0) or 0,
@@ -131,7 +131,7 @@ def _parse_boxscore(data: dict) -> dict:
         ip_frac = p.get("InningPitchedDiv3Cnt", 0) or 0
         result["pitchers"].append({
             "name": p.get("PitcherName", ""),
-            "team": "home" if p.get("VisitingHomeType") == 2 else "away",
+            "team": "home" if str(p.get("VisitingHomeType", "0")) == "2" else "away",
             "ip": f"{ip_full}.{ip_frac}",
             "strikeouts": p.get("StrikeOutCnt", 0) or 0,
             "earned_runs": p.get("EarnedRunCnt", 0) or 0,
