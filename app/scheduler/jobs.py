@@ -144,6 +144,58 @@ async def midday_update():
     return {"updated": updated}
 
 
+async def send_pending_notifications():
+    """Every 1 min - Send notifications that are due (notify_at <= now, sent=false)."""
+    from datetime import datetime
+    from linebot.v3.messaging import (
+        ApiClient, Configuration, MessagingApi,
+        PushMessageRequest, TextMessage,
+    )
+    from app.config import settings
+
+    now = datetime.now()
+    db = get_db()
+
+    # Find due notifications
+    due = list(db["notifications"].find({"notify_at": {"$lte": now}, "sent": False}))
+    if not due:
+        return {"notified": 0}
+
+    configuration = Configuration(access_token=settings.line_channel_access_token)
+    notified = 0
+
+    with ApiClient(configuration) as api_client:
+        api = MessagingApi(api_client)
+        for n in due:
+            info = n.get("game_info", {})
+            away = info.get("away_team_name", "")
+            home = info.get("home_team_name", "")
+            venue = info.get("venue", "")
+            game_time = info.get("game_time", "")
+
+            msg = (
+                f"⚾ 比賽即將開始！\n\n"
+                f"{away} vs {home}\n"
+                f"📍 {venue}  ⏰ {game_time}\n\n"
+                f"你在這場比賽有下注，祝好運！🍀"
+            )
+
+            try:
+                api.push_message(PushMessageRequest(
+                    to=n["user_id"],
+                    messages=[TextMessage(text=msg)],
+                ))
+                notified += 1
+                logger.info(f"[NOTIFY] {n['user_id'][:10]}.. → {away} vs {home}")
+            except Exception as e:
+                logger.warning(f"Push notify failed: {e}")
+
+            # Mark sent
+            db["notifications"].update_one({"_id": n["_id"]}, {"$set": {"sent": True}})
+
+    return {"notified": notified}
+
+
 async def midnight_settle():
     """00:00 - Scrape today's results + boxscores and settle all bets."""
     from app.scraper.cpbl_boxscore import scrape_boxscore

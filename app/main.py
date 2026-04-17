@@ -24,6 +24,7 @@ from app.scheduler.jobs import (
     morning_job,
     midday_update,
     midnight_settle,
+    send_pending_notifications,
 )
 
 logging.basicConfig(
@@ -36,8 +37,28 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("CPBL Betting Bot starting up")
+    # Start background notification checker
+    from apscheduler.schedulers.background import BackgroundScheduler
+    scheduler = BackgroundScheduler(timezone="Asia/Taipei")
+    scheduler.add_job(_check_notifications, "interval", seconds=30, id="notify_checker")
+    scheduler.start()
+    logger.info("Notification checker started (every 10s)")
     yield
+    scheduler.shutdown()
     logger.info("CPBL Betting Bot shutting down")
+
+
+def _check_notifications():
+    """Background job: send due notifications."""
+    import asyncio
+    try:
+        loop = asyncio.new_event_loop()
+        result = loop.run_until_complete(send_pending_notifications())
+        if result.get("notified", 0) > 0:
+            logger.info(f"Notifications sent: {result}")
+        loop.close()
+    except Exception as e:
+        logger.error(f"Notification checker error: {e}")
 
 
 app = FastAPI(title="CPBL Virtual Betting Bot", lifespan=lifespan)
@@ -103,6 +124,14 @@ async def cron_settle(x_cron_secret: Optional[str] = Header(None)):
     """00:00 - Scrape results + settle bets."""
     _verify_cron(x_cron_secret)
     result = await midnight_settle()
+    return {"status": "ok", **result}
+
+
+@app.post("/cron/notify")
+async def cron_notify(x_cron_secret: Optional[str] = Header(None)):
+    """Every 1 min - Send due pre-game notifications."""
+    _verify_cron(x_cron_secret)
+    result = await send_pending_notifications()
     return {"status": "ok", **result}
 
 

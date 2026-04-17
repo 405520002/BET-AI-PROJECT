@@ -147,8 +147,45 @@ def place_bet(user_id: str, game_id: str, market_index: int, selection: str, odd
         "note": f"下注 {market.get('name', '')} - {selection} @{odds} ({amount:,} 元)",
     })
 
+    # Schedule pre-game notification
+    _schedule_notification(user_id, game)
+
     return {
         "success": True,
         "message": f"下注成功！\n注單: {selection} @{odds}\n金額: {amount:,} 元\n預計獎金: {potential_payout:,} 元\n餘額: {new_balance:,} 元",
         "bet_id": bet_id,
     }
+
+
+def _schedule_notification(user_id: str, game: dict):
+    """Save a pre-game notification to DB (5 min before game)."""
+    from app.db.client import get_db
+    game_time = game.get("game_time", "")
+    if not game_time:
+        return
+
+    try:
+        hour, minute = int(game_time.split(":")[0]), int(game_time.split(":")[1])
+        game_date = game.get("date", date.today().isoformat())
+        parts = game_date.split("-")
+        game_dt = datetime(int(parts[0]), int(parts[1]), int(parts[2]), hour, minute)
+        notify_at = game_dt - __import__("datetime").timedelta(minutes=5)
+
+        db = get_db()
+        # Upsert: one notification per user per game
+        db["notifications"].update_one(
+            {"user_id": user_id, "game_id": game.get("id", "")},
+            {"$set": {
+                "notify_at": notify_at,
+                "sent": False,
+                "game_info": {
+                    "away_team_name": game.get("away_team_name", ""),
+                    "home_team_name": game.get("home_team_name", ""),
+                    "venue": game.get("venue", ""),
+                    "game_time": game_time,
+                },
+            }},
+            upsert=True,
+        )
+    except (ValueError, IndexError):
+        pass
