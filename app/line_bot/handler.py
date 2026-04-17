@@ -445,11 +445,16 @@ def _handle_live(event, user_id: str):
                         continue
 
                     data = r2.json()
-                    gd_raw = data.get("GameDetailJson") or "[]"
-                    gd_list = json.loads(gd_raw) if isinstance(gd_raw, str) else (gd_raw or [])
-                    if not gd_list:
-                        continue
-                    gd = gd_list[0] if isinstance(gd_list, list) else gd_list
+                    # Use CurtGameDetailJson (has team names) over GameDetailJson (often null)
+                    curt_raw = data.get("CurtGameDetailJson") or "{}"
+                    gd = json.loads(curt_raw) if isinstance(curt_raw, str) else (curt_raw or {})
+                    if not gd or not gd.get("VisitingTeamName"):
+                        # Fallback to GameDetailJson
+                        gd_raw = data.get("GameDetailJson") or "[]"
+                        gd_list = json.loads(gd_raw) if isinstance(gd_raw, str) else (gd_raw or [])
+                        if not gd_list:
+                            continue
+                        gd = gd_list[0] if isinstance(gd_list, list) else gd_list
 
                     # Parse scoreboard
                     sb_raw = data.get("ScoreboardJson") or "[]"
@@ -488,8 +493,8 @@ def _handle_live(event, user_id: str):
                         game_status = {0: "未開始", 1: "比賽中", 2: "比賽中", 3: "比賽結束"}.get(gs_code, "")
 
                     live_games.append({
-                        "away_team_name": _to_chinese_name(gd.get("VisitingTeamName", "")),
-                        "home_team_name": _to_chinese_name(gd.get("HomeTeamName", "")),
+                        "away_team_name": _to_chinese_name(gd.get("VisitingTeamName") or game.get("away_team_name", "")),
+                        "home_team_name": _to_chinese_name(gd.get("HomeTeamName") or game.get("home_team_name", "")),
                         "away_score": gd.get("VisitingTotalScore", 0) or 0,
                         "home_score": gd.get("HomeTotalScore", 0) or 0,
                         "venue": _to_chinese_venue(gd.get("FieldAbbe", game.get("venue", ""))),
