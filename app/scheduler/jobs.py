@@ -166,6 +166,189 @@ def _push_today_games(games: list[dict]):
     logger.info(f"[08:00] Pushed today's games to {sent}/{len(users)} users")
 
 
+def _push_post_game_analysis(date_str: str, boxscores: dict, games: list[dict]):
+    """Generate and push post-game analysis cards to users who bet."""
+    from linebot.v3.messaging import (
+        ApiClient, Configuration, MessagingApi,
+        PushMessageRequest, FlexMessage, FlexContainer,
+    )
+    from app.config import settings
+    from app.db import bet_repo
+
+    db = get_db()
+
+    # Find users who bet today and which games they bet on
+    user_games = {}  # {user_id: [game_id, ...]}
+    all_bets = list(db["bets"].find({"game_date": date_str}))
+    for bet in all_bets:
+        uid = bet.get("user_id", "")
+        gid = bet.get("game_id", "")
+        if uid not in user_games:
+            user_games[uid] = set()
+        user_games[uid].add(gid)
+
+    if not user_games:
+        logger.info("[00:00] No users bet today, skipping analysis")
+        return
+
+    # Generate analysis cards for each game
+    game_cards = {}
+    for game in games:
+        gid = game.get("id", "")
+        bs = boxscores.get(gid)
+        if not bs:
+            continue
+        card = _build_analysis_card(game, bs)
+        if card:
+            game_cards[gid] = card
+
+    if not game_cards:
+        return
+
+    # Push to each user their relevant cards
+    configuration = Configuration(access_token=settings.line_channel_access_token)
+    sent = 0
+
+    with ApiClient(configuration) as api_client:
+        api = MessagingApi(api_client)
+        for uid, game_ids in user_games.items():
+            cards = [game_cards[gid] for gid in game_ids if gid in game_cards]
+            if not cards:
+                continue
+
+            # Build carousel
+            flex_data = {
+                "type": "carousel",
+                "contents": cards[:10],
+            }
+
+            try:
+                api.push_message(PushMessageRequest(
+                    to=uid,
+                    messages=[FlexMessage(
+                        alt_text="賽後分析",
+                        contents=FlexContainer.from_dict(flex_data),
+                    )],
+                ))
+                sent += 1
+            except Exception as e:
+                logger.warning(f"Post-game push failed for {uid[:10]}...: {e}")
+
+    logger.info(f"[00:00] Pushed post-game analysis to {sent} users")
+
+
+def _build_analysis_card(game: dict, bs: dict) -> dict | None:
+    """Build a single post-game analysis bubble from boxscore."""
+    away = game.get("away_team_name", "")
+    home = game.get("home_team_name", "")
+    away_score = bs.get("away_score", 0)
+    home_score = bs.get("home_score", 0)
+    winner = home if home_score > away_score else away
+
+    # Find top performers from batting
+    batters = bs.get("batting_summary", [])
+    top_hitters = sorted(batters, key=lambda b: b.get("hits", 0) + b.get("hr", 0) * 2, reverse=True)[:3]
+
+    # Pitchers
+    pitchers = bs.get("pitchers", [])
+    starters = []
+    for team in ["away", "home"]:
+        for p in pitchers:
+            if p.get("team") == team:
+                starters.append(p)
+                break
+
+    # Build content
+    contents = [
+        # Score header
+        {
+            "type": "box",
+            "layout": "horizontal",
+            "contents": [
+                {"type": "text", "text": away, "size": "sm", "color": "#CCCCCC", "flex": 3},
+                {"type": "text", "text": str(away_score), "size": "xl", "color": "#FFFFFF", "weight": "bold", "align": "center", "flex": 1},
+                {"type": "text", "text": ":", "size": "md", "color": "#888888", "align": "center", "flex": 1},
+                {"type": "text", "text": str(home_score), "size": "xl", "color": "#FFFFFF", "weight": "bold", "align": "center", "flex": 1},
+                {"type": "text", "text": home, "size": "sm", "color": "#CCCCCC", "align": "end", "flex": 3},
+            ],
+        },
+        {"type": "text", "text": f"🏆 {winner} 勝", "size": "sm", "color": "#F39C12", "align": "center", "margin": "md"},
+        {"type": "separator", "margin": "lg", "color": "#333333"},
+    ]
+
+    # Top hitters
+    if top_hitters:
+        contents.append({"type": "text", "text": "打擊表現", "size": "sm", "color": "#F39C12", "weight": "bold", "margin": "lg"})
+        for h in top_hitters:
+            name = h.get("name", "")
+            hits = h.get("hits", 0)
+            hr = h.get("hr", 0)
+            rbi = h.get("rbi", 0)
+            stats = f"{hits}安"
+            if hr > 0:
+                stats += f" {hr}轟"
+            if rbi > 0:
+                stats += f" {rbi}打點"
+            contents.append({
+                "type": "box", "layout": "horizontal", "margin": "sm",
+                "contents": [
+                    {"type": "text", "text": name, "size": "xs", "color": "#CCCCCC", "flex": 3},
+                    {"type": "text", "text": stats, "size": "xs", "color": "#FFFFFF", "align": "end", "flex": 4},
+                ],
+            })
+
+    # Pitchers
+    if starters:
+        contents.append({"type": "separator", "margin": "lg", "color": "#333333"})
+        contents.append({"type": "text", "text": "投手表現", "size": "sm", "color": "#F39C12", "weight": "bold", "margin": "lg"})
+        for p in starters:
+            name = p.get("name", "")
+            ip = p.get("ip", "0.0")
+            k = p.get("strikeouts", 0)
+            er = p.get("earned_runs", 0)
+            contents.append({
+                "type": "box", "layout": "horizontal", "margin": "sm",
+                "contents": [
+                    {"type": "text", "text": name, "size": "xs", "color": "#CCCCCC", "flex": 3},
+                    {"type": "text", "text": f"{ip}局 {k}K {er}ER", "size": "xs", "color": "#FFFFFF", "align": "end", "flex": 4},
+                ],
+            })
+
+    # Game stats
+    total_hr = bs.get("total_hr", 0)
+    first_inning = bs.get("first_inning_runs", 0)
+    contents.append({"type": "separator", "margin": "lg", "color": "#333333"})
+    contents.append({
+        "type": "box", "layout": "horizontal", "margin": "lg",
+        "contents": [
+            {"type": "text", "text": f"全壘打 {total_hr}", "size": "xxs", "color": "#888888", "flex": 1},
+            {"type": "text", "text": f"首局得分 {first_inning}", "size": "xxs", "color": "#888888", "align": "center", "flex": 1},
+            {"type": "text", "text": f"總分 {away_score + home_score}", "size": "xxs", "color": "#888888", "align": "end", "flex": 1},
+        ],
+    })
+
+    return {
+        "type": "bubble",
+        "size": "mega",
+        "header": {
+            "type": "box",
+            "layout": "vertical",
+            "backgroundColor": "#1B2838",
+            "paddingAll": "12px",
+            "contents": [
+                {"type": "text", "text": f"📊 賽後分析  {game.get('date', '')}", "color": "#AAAAAA", "size": "xs"},
+            ],
+        },
+        "body": {
+            "type": "box",
+            "layout": "vertical",
+            "backgroundColor": "#1B2838",
+            "paddingAll": "15px",
+            "contents": contents,
+        },
+    }
+
+
 async def midday_update():
     """12:00 - Re-scrape schedule to update game info (pitchers/venue/time), keep existing odds."""
     today = date.today().isoformat()
@@ -284,6 +467,10 @@ async def midnight_settle():
     # Step 3: Settle all bets (with boxscores for custom bets)
     settle_result = settle_all_games_for_date(today, boxscores)
     logger.info(f"[00:00] Settlement: {settle_result}")
+
+    # Step 4: Push post-game analysis to users who bet
+    if boxscores:
+        _push_post_game_analysis(today, boxscores, final_games)
 
     return {"results_updated": results_updated, "boxscores": len(boxscores), **settle_result}
 
