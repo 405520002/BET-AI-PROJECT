@@ -446,13 +446,15 @@ def _handle_live(event, user_id: str):
                     continue
 
                 data = r2.json()
-                gd_list = json.loads(data.get("GameDetailJson", "[]"))
+                gd_raw = data.get("GameDetailJson") or "[]"
+                gd_list = json.loads(gd_raw) if isinstance(gd_raw, str) else (gd_raw or [])
                 if not gd_list:
                     continue
                 gd = gd_list[0] if isinstance(gd_list, list) else gd_list
 
                 # Parse scoreboard
-                sb_list = json.loads(data.get("ScoreboardJson", "[]"))
+                sb_raw = data.get("ScoreboardJson") or "[]"
+                sb_list = json.loads(sb_raw) if isinstance(sb_raw, str) else (sb_raw or [])
                 away_inn = {}
                 home_inn = {}
                 for item in sb_list:
@@ -469,7 +471,8 @@ def _handle_live(event, user_id: str):
                 home_scores = [home_inn.get(i, 0) for i in range(1, max_inning + 1)]
 
                 # Parse pitchers
-                pitching_list = json.loads(data.get("PitchingJson", "[]"))
+                pitch_raw = data.get("PitchingJson") or "[]"
+                pitching_list = json.loads(pitch_raw) if isinstance(pitch_raw, str) else (pitch_raw or [])
                 pitchers = []
                 for p in pitching_list[:4]:
                     pitchers.append({
