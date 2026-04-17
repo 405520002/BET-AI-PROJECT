@@ -111,7 +111,7 @@ def _convert_single_game_json(openrouter, design_text: str, game_id: str) -> dic
                 model=JSON_MODEL,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0,
-                max_tokens=2048,
+                max_tokens=4096,
             )
             json_text = response.choices[0].message.content or ""
             if "<think>" in json_text:
@@ -138,8 +138,9 @@ def _convert_single_game_json(openrouter, design_text: str, game_id: str) -> dic
             raise ValueError("No valid markets")
 
         except Exception as e:
-            raw = (response.choices[0].message.content or "")[:150] if response else ""
-            logger.warning(f"Step 2 {game_id} attempt {attempt + 1} failed: {e} | raw: {raw}")
+            raw_full = (response.choices[0].message.content or "") if response else ""
+            finish = response.choices[0].finish_reason if response else "none"
+            logger.warning(f"Step 2 {game_id} attempt {attempt + 1} failed: {e} | finish_reason: {finish} | len: {len(raw_full)} | raw: {raw_full[:200]}")
             time.sleep(1)
 
     return None
