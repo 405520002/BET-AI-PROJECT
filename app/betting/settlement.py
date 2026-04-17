@@ -140,6 +140,10 @@ def settle_all_games_for_date(date_str: str, boxscores: dict | None = None) -> d
 # Rule-based settlement
 # ============================================================
 
+RULE_TYPES = {"moneyline", "over_under", "spread", "first_inning", "total_hr",
+              "win_margin", "pitcher_k", "pitcher_er", "team_hits", "team_runs"}
+
+
 def _can_rule_settle(bet: dict, game: dict, boxscore: dict | None) -> bool:
     """Check if this bet can be settled with rules."""
     bet_type = bet.get("bet_type", "")
@@ -148,24 +152,26 @@ def _can_rule_settle(bet: dict, game: dict, boxscore: dict | None) -> bool:
     if bet_type in ("moneyline", "over_under", "spread"):
         return True
 
-    # Custom bets - check if we have the data
-    if not boxscore:
-        return False
+    # These need boxscore
+    if bet_type in ("first_inning", "total_hr", "win_margin", "pitcher_k",
+                    "pitcher_er", "team_hits", "team_runs"):
+        return boxscore is not None
 
-    market_name = bet.get("market_name", "")
-    selection = bet.get("selection", "")
-
-    # First inning
-    if "首局" in market_name and boxscore.get("first_inning_runs") is not None:
-        return True
-
-    # Home runs
-    if "全壘打" in market_name and boxscore.get("total_hr") is not None:
-        return True
-
-    # Winning margin
-    if ("贏" in market_name and "分" in market_name) and boxscore.get("winning_margin") is not None:
-        return True
+    # Legacy custom type - try to match by market_name keywords
+    if bet_type == "custom" and boxscore:
+        market_name = bet.get("market_name", "")
+        if "首局" in market_name:
+            return True
+        if "全壘打" in market_name:
+            return True
+        if "贏" in market_name and "分" in market_name:
+            return True
+        if "三振" in market_name or "K" in bet.get("selection", ""):
+            return True
+        if "失分" in market_name or "自責" in market_name:
+            return True
+        if "安打" in market_name:
+            return True
 
     return False
 
