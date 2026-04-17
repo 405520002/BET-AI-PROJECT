@@ -532,7 +532,9 @@ async def midnight_settle():
     import time
     import random
 
-    today = date.today().isoformat()
+    # At 00:00, settle yesterday's games (they just finished)
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    today = yesterday  # settle yesterday
     logger.info(f"[00:00] Scraping results and settling for {today}")
 
     # Step 1: Scrape basic results (updates game status to final/postponed)
