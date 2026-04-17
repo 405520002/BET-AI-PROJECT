@@ -91,7 +91,7 @@ def _generate_two_step(games: list[dict], standings: dict) -> dict[str, dict]:
                 model=JSON_MODEL,
                 messages=[{"role": "user", "content": json_prompt}],
                 temperature=0,
-                max_tokens=4096,
+                max_tokens=8192,
             )
             json_text = response.choices[0].message.content or ""
             # Remove thinking tags
