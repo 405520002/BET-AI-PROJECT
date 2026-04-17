@@ -230,49 +230,187 @@ def _rule_evaluate(bet: dict, game: dict, boxscore: dict | None) -> tuple[str, i
             return ("refunded", amount, f"{reason}，平盤退款")
         return ("lost", 0, reason)
 
-    # Custom with boxscore data
+    # === New type-based evaluation (with boxscore) ===
     if boxscore:
-        market_name = bet.get("market_name", "")
+        if bet_type == "first_inning" or (bet_type == "custom" and "首局" in bet.get("market_name", "")):
+            return _eval_first_inning(selection, odds, amount, boxscore)
 
-        # First inning run
-        if "首局" in market_name:
-            fir = boxscore.get("first_inning_runs", 0)
-            reason = f"實際首局得分: {fir}分"
-            if ("有" in selection or "是" in selection) and fir > 0:
-                return ("won", round(amount * odds), reason)
-            elif ("無" in selection or "否" in selection) and fir == 0:
-                return ("won", round(amount * odds), reason)
-            return ("lost", 0, reason)
+        if bet_type == "total_hr" or (bet_type == "custom" and "全壘打" in bet.get("market_name", "")):
+            return _eval_total_hr(selection, odds, amount, boxscore)
 
-        # Total HR
-        if "全壘打" in market_name:
-            hr = boxscore.get("total_hr", 0)
-            line = _extract_number(selection)
-            reason = f"實際全壘打: {hr}支"
-            if line is not None:
-                if "大" in selection and hr > line:
-                    return ("won", round(amount * odds), reason)
-                elif "小" in selection and hr < line:
-                    return ("won", round(amount * odds), reason)
-                elif hr == line:
-                    return ("refunded", amount, f"{reason}，平盤退款")
-            elif "0" in selection and hr == 0:
-                return ("won", round(amount * odds), reason)
-            elif "1+" in selection and hr >= 1:
-                return ("won", round(amount * odds), reason)
-            return ("lost", 0, reason)
+        if bet_type == "win_margin" or (bet_type == "custom" and "贏" in bet.get("market_name", "") and "分" in bet.get("market_name", "")):
+            return _eval_win_margin(selection, odds, amount, boxscore)
 
-        # Winning margin
-        if "贏" in market_name and "分" in market_name:
-            margin = boxscore.get("winning_margin", 0)
-            reason = f"實際勝分差: {margin}分"
-            if "1-2" in selection and 1 <= margin <= 2:
-                return ("won", round(amount * odds), reason)
-            elif "3" in selection and ("以上" in selection or "及以上" in selection) and margin >= 3:
-                return ("won", round(amount * odds), reason)
-            return ("lost", 0, reason)
+        if bet_type == "pitcher_k" or (bet_type == "custom" and ("三振" in bet.get("market_name", "") or "K" in selection)):
+            return _eval_pitcher_k(selection, odds, amount, boxscore, game)
+
+        if bet_type == "pitcher_er" or (bet_type == "custom" and ("失分" in bet.get("market_name", "") or "自責" in bet.get("market_name", ""))):
+            return _eval_pitcher_er(selection, odds, amount, boxscore, game)
+
+        if bet_type == "team_hits" or (bet_type == "custom" and "安打" in bet.get("market_name", "")):
+            return _eval_team_hits(selection, odds, amount, boxscore, game)
+
+        if bet_type == "team_runs" or (bet_type == "custom" and "得分" in bet.get("market_name", "")):
+            return _eval_team_runs(selection, odds, amount, boxscore, game)
 
     return ("lost", 0, "")
+
+
+def _eval_first_inning(selection, odds, amount, bs):
+    fir = bs.get("first_inning_runs", 0)
+    reason = f"實際首局得分: {fir}分"
+    if ("有" in selection or "是" in selection) and fir > 0:
+        return ("won", round(amount * odds), reason)
+    elif ("無" in selection or "否" in selection) and fir == 0:
+        return ("won", round(amount * odds), reason)
+    return ("lost", 0, reason)
+
+
+def _eval_total_hr(selection, odds, amount, bs):
+    hr = bs.get("total_hr", 0)
+    line = _extract_number(selection)
+    reason = f"實際全壘打: {hr}支"
+    if line is not None:
+        if ("大" in selection or "over" in selection.lower()) and hr > line:
+            return ("won", round(amount * odds), reason)
+        elif ("小" in selection or "under" in selection.lower()) and hr < line:
+            return ("won", round(amount * odds), reason)
+        elif hr == line:
+            return ("refunded", amount, f"{reason}，平盤退款")
+    elif "0" in selection and hr == 0:
+        return ("won", round(amount * odds), reason)
+    elif "1+" in selection and hr >= 1:
+        return ("won", round(amount * odds), reason)
+    return ("lost", 0, reason)
+
+
+def _eval_win_margin(selection, odds, amount, bs):
+    margin = bs.get("winning_margin", 0)
+    reason = f"實際勝分差: {margin}分"
+    if "1-2" in selection and 1 <= margin <= 2:
+        return ("won", round(amount * odds), reason)
+    elif ("3" in selection and ("以上" in selection or "及以上" in selection)) and margin >= 3:
+        return ("won", round(amount * odds), reason)
+    # Generic over/under
+    line = _extract_number(selection)
+    if line is not None:
+        if ("大" in selection or "over" in selection.lower()) and margin > line:
+            return ("won", round(amount * odds), reason)
+        elif ("小" in selection or "under" in selection.lower()) and margin < line:
+            return ("won", round(amount * odds), reason)
+    return ("lost", 0, reason)
+
+
+def _eval_pitcher_k(selection, odds, amount, bs, game):
+    """Evaluate pitcher strikeout over/under."""
+    pitchers = bs.get("pitchers", [])
+    home_name = game.get("home_team_name", "")
+    away_name = game.get("away_team_name", "")
+    market_name = game.get("market_name", "") if "market_name" in game else ""
+
+    # Find the relevant starter (first pitcher of each team)
+    starter_k = 0
+    for p in pitchers:
+        # Match by team name in selection or market
+        if home_name and home_name in selection and p.get("team") == "home":
+            starter_k = p.get("strikeouts", 0)
+            break
+        elif away_name and away_name in selection and p.get("team") == "away":
+            starter_k = p.get("strikeouts", 0)
+            break
+    else:
+        # No team match, use first pitcher (home starter if ambiguous)
+        for p in pitchers:
+            if p.get("team") == "home":
+                starter_k = p.get("strikeouts", 0)
+                break
+
+    line = _extract_number(selection)
+    reason = f"實際三振: {starter_k}K"
+    if line is not None:
+        if ("大" in selection or "over" in selection.lower()) and starter_k > line:
+            return ("won", round(amount * odds), reason)
+        elif ("小" in selection or "under" in selection.lower()) and starter_k < line:
+            return ("won", round(amount * odds), reason)
+        elif starter_k == line:
+            return ("refunded", amount, f"{reason}，平盤退款")
+    return ("lost", 0, reason)
+
+
+def _eval_pitcher_er(selection, odds, amount, bs, game):
+    """Evaluate pitcher earned runs over/under."""
+    pitchers = bs.get("pitchers", [])
+    home_name = game.get("home_team_name", "")
+    away_name = game.get("away_team_name", "")
+
+    # Find relevant team's total ER or starter ER
+    target_er = 0
+    if home_name and home_name in selection:
+        # Home team pitchers' ER = away team's score essentially
+        target_er = sum(p.get("earned_runs", 0) for p in pitchers if p.get("team") == "home")
+    elif away_name and away_name in selection:
+        target_er = sum(p.get("earned_runs", 0) for p in pitchers if p.get("team") == "away")
+    else:
+        # First pitcher
+        for p in pitchers:
+            target_er = p.get("earned_runs", 0)
+            break
+
+    line = _extract_number(selection)
+    reason = f"實際失分: {target_er}分"
+    if line is not None:
+        if ("大" in selection or "超過" in selection or "over" in selection.lower()) and target_er > line:
+            return ("won", round(amount * odds), reason)
+        elif ("小" in selection or "不超過" in selection or "等於" in selection or "under" in selection.lower()) and target_er <= line:
+            return ("won", round(amount * odds), reason)
+    return ("lost", 0, reason)
+
+
+def _eval_team_hits(selection, odds, amount, bs, game):
+    """Evaluate team total hits over/under."""
+    batters = bs.get("batting_summary", [])
+    home_name = game.get("home_team_name", "")
+    away_name = game.get("away_team_name", "")
+
+    if home_name and home_name in selection:
+        total = sum(b.get("hits", 0) for b in batters if b.get("team") == "home")
+    elif away_name and away_name in selection:
+        total = sum(b.get("hits", 0) for b in batters if b.get("team") == "away")
+    else:
+        total = sum(b.get("hits", 0) for b in batters)
+
+    line = _extract_number(selection)
+    reason = f"實際安打: {total}支"
+    if line is not None:
+        if ("大" in selection or "over" in selection.lower()) and total > line:
+            return ("won", round(amount * odds), reason)
+        elif ("小" in selection or "under" in selection.lower()) and total < line:
+            return ("won", round(amount * odds), reason)
+        elif total == line:
+            return ("refunded", amount, f"{reason}，平盤退款")
+    return ("lost", 0, reason)
+
+
+def _eval_team_runs(selection, odds, amount, bs, game):
+    """Evaluate single team runs over/under."""
+    home_name = game.get("home_team_name", "")
+    away_name = game.get("away_team_name", "")
+
+    if home_name and home_name in selection:
+        actual = bs.get("home_score", 0)
+    elif away_name and away_name in selection:
+        actual = bs.get("away_score", 0)
+    else:
+        actual = bs.get("home_score", 0) + bs.get("away_score", 0)
+
+    line = _extract_number(selection)
+    reason = f"實際得分: {actual}分"
+    if line is not None:
+        if ("大" in selection or "超過" in selection or "over" in selection.lower()) and actual > line:
+            return ("won", round(amount * odds), reason)
+        elif ("小" in selection or "不超過" in selection or "under" in selection.lower()) and actual <= line:
+            return ("won", round(amount * odds), reason)
+    return ("lost", 0, reason)
 
 
 # ============================================================
