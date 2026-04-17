@@ -569,7 +569,66 @@ async def midnight_settle():
     if boxscores:
         _push_post_game_analysis(today, boxscores, final_games)
 
+    # Step 5: Update caches (standings, upcoming, finished games)
+    await _update_caches_after_settle()
+
     return {"results_updated": results_updated, "boxscores": len(boxscores), **settle_result}
+
+
+async def _update_caches_after_settle():
+    """Update standings, upcoming schedule, and finished games cache after settlement."""
+    import time as _time
+    import random as _random
+
+    db = get_db()
+    today_obj = date.today()
+    today_str = today_obj.isoformat()
+
+    try:
+        # Update standings
+        standings = await cpbl_standings.scrape_standings()
+        if standings:
+            db["cache"].update_one(
+                {"_id": "standings"},
+                {"$set": {"data": standings, "updated_at": today_str}},
+                upsert=True,
+            )
+            logger.info("[00:00] Updated standings cache")
+
+        _time.sleep(_random.uniform(1, 2))
+
+        # Update finished games + upcoming schedule
+        all_games = await cpbl_schedule.scrape_schedule_for_date(today_obj.year, today_obj.month)
+
+        # Store finished games (for 近期賽果)
+        finished = [g for g in all_games if g.get("status") in ("final", "postponed")]
+        for game in finished:
+            game_repo.upsert_game(game["id"], game)
+        logger.info(f"[00:00] Updated {len(finished)} finished games")
+
+        # Update upcoming schedule cache
+        seven_days = (today_obj + timedelta(days=7)).isoformat()
+        upcoming = [g for g in all_games if g.get("status") == "scheduled" and today_str <= g.get("date", "") <= seven_days]
+        games_by_date = {}
+        for g in upcoming:
+            d = g.get("date", "")
+            if d not in games_by_date:
+                games_by_date[d] = []
+            games_by_date[d].append({
+                "away_team_name": g.get("away_team_name", ""),
+                "home_team_name": g.get("home_team_name", ""),
+                "venue": g.get("venue", ""),
+                "game_time": g.get("game_time", ""),
+            })
+        db["cache"].update_one(
+            {"_id": "upcoming_schedule"},
+            {"$set": {"data": games_by_date, "updated_at": today_str}},
+            upsert=True,
+        )
+        logger.info(f"[00:00] Updated upcoming cache: {len(upcoming)} games")
+
+    except Exception as e:
+        logger.warning(f"[00:00] Cache update failed: {e}")
 
 
 # === Helpers ===
