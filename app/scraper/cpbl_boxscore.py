@@ -80,14 +80,19 @@ def _parse_boxscore(data: dict) -> dict:
         "raw_text": "",  # For AI fallback
     }
 
-    # Game detail
-    gd_list = json.loads(data.get("GameDetailJson", "[]"))
-    if gd_list:
-        gd = gd_list[0] if isinstance(gd_list, list) else gd_list
+    # Game detail - prefer CurtGameDetailJson (has team names)
+    curt_raw = data.get("CurtGameDetailJson") or "{}"
+    gd = json.loads(curt_raw) if isinstance(curt_raw, str) else (curt_raw or {})
+    if not gd or not gd.get("VisitingTeamName"):
+        gd_list = json.loads(data.get("GameDetailJson") or "[]")
+        if gd_list:
+            gd = gd_list[0] if isinstance(gd_list, list) else gd_list
+
+    if gd:
         result["home_score"] = gd.get("HomeTotalScore", 0) or 0
         result["away_score"] = gd.get("VisitingTotalScore", 0) or 0
-        result["home_team_name"] = gd.get("HomeTeamName", "")
-        result["away_team_name"] = gd.get("VisitingTeamName", "")
+        result["home_team_name"] = gd.get("HomeTeamName") or ""
+        result["away_team_name"] = gd.get("VisitingTeamName") or ""
         result["winning_margin"] = abs(result["home_score"] - result["away_score"])
 
     # Scoreboard (逐局比分)
@@ -95,12 +100,12 @@ def _parse_boxscore(data: dict) -> dict:
     home_innings = {}
     away_innings = {}
     for item in sb_list:
-        inning = int(float(item.get("InningSeq", 0) or item.get("Inning", 0)))
-        score = int(item.get("Score", 0) or 0)
-        vh_type = str(item.get("VisitingHomeType", "0"))
-        if vh_type == "1":
+        inning = int(float(item.get("InningSeq", 0) or item.get("Inning", 0) or 0))
+        score = int(float(item.get("ScoreCnt", 0) or item.get("Score", 0) or 0))
+        vh_type = int(float(item.get("VisitingHomeType", 0) or 0))
+        if vh_type == 1:
             away_innings[inning] = score
-        elif vh_type == "2":
+        elif vh_type == 2:
             home_innings[inning] = score
 
     # First inning runs
@@ -109,33 +114,38 @@ def _parse_boxscore(data: dict) -> dict:
     result["first_inning_runs"] = first_away + first_home
 
     # Batting stats (HR count)
-    batting_list = json.loads(data.get("BattingJson", "[]"))
+    batting_raw = data.get("BattingJson") or "[]"
+    batting_list = json.loads(batting_raw) if isinstance(batting_raw, str) else (batting_raw or [])
     total_hr = 0
     for b in batting_list:
-        hr = b.get("HomeRunCnt", 0) or 0
+        hr = int(b.get("HomeRunCnt", 0) or 0)
         total_hr += hr
-        if hr > 0 or (b.get("HittingCnt", 0) or 0) > 0:
+        hits = int(b.get("HittingCnt", 0) or 0)
+        if hr > 0 or hits > 0:
+            vh = int(float(b.get("VisitingHomeType", 0) or 0))
             result["batting_summary"].append({
-                "name": b.get("HitterName", ""),
-                "team": "home" if str(b.get("VisitingHomeType", "0")) == "2" else "away",
-                "hits": b.get("HittingCnt", 0) or 0,
+                "name": b.get("HitterName", "") or "",
+                "team": "home" if vh == 2 else "away",
+                "hits": hits,
                 "hr": hr,
-                "rbi": b.get("RunBattedInCnt", 0) or 0,
+                "rbi": int(b.get("RunBattedINCnt", 0) or b.get("RunBattedInCnt", 0) or 0),
             })
     result["total_hr"] = total_hr
 
     # Pitching stats
-    pitching_list = json.loads(data.get("PitchingJson", "[]"))
+    pitch_raw = data.get("PitchingJson") or "[]"
+    pitching_list = json.loads(pitch_raw) if isinstance(pitch_raw, str) else (pitch_raw or [])
     for p in pitching_list:
-        ip_full = p.get("InningPitchedCnt", 0) or 0
-        ip_frac = p.get("InningPitchedDiv3Cnt", 0) or 0
+        ip_full = int(p.get("InningPitchedCnt", 0) or 0)
+        ip_frac = int(p.get("InningPitchedDiv3Cnt", 0) or 0)
+        vh = int(float(p.get("VisitingHomeType", 0) or 0))
         result["pitchers"].append({
-            "name": p.get("PitcherName", ""),
-            "team": "home" if str(p.get("VisitingHomeType", "0")) == "2" else "away",
+            "name": p.get("PitcherName", "") or "",
+            "team": "home" if vh == 2 else "away",
             "ip": f"{ip_full}.{ip_frac}",
-            "strikeouts": p.get("StrikeOutCnt", 0) or 0,
-            "earned_runs": p.get("EarnedRunCnt", 0) or 0,
-            "hits_allowed": p.get("HittingCnt", 0) or 0,
+            "strikeouts": int(p.get("StrikeOutCnt", 0) or 0),
+            "earned_runs": int(p.get("EarnedRunCnt", 0) or 0),
+            "hits_allowed": int(p.get("HittingCnt", 0) or 0),
             "walks": p.get("BasesOnBallsCnt", 0) or 0,
         })
 

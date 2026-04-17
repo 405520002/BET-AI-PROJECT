@@ -465,12 +465,12 @@ def _handle_live(event, user_id: str):
                     away_inn = {}
                     home_inn = {}
                     for item in sb_list:
-                        inning = int(float(item.get("InningSeq", 0) or item.get("Inning", 0)))
-                        score = int(item.get("Score", 0) or 0)
-                        vh = str(item.get("VisitingHomeType", "0"))
-                        if vh == "1":
+                        inning = int(float(item.get("InningSeq", 0) or item.get("Inning", 0) or 0))
+                        score = int(float(item.get("ScoreCnt", 0) or item.get("Score", 0) or 0))
+                        vh = int(float(item.get("VisitingHomeType", 0) or 0))
+                        if vh == 1:
                             away_inn[inning] = score
-                        elif vh == "2":
+                        elif vh == 2:
                             home_inn[inning] = score
 
                     max_inning = max(list(away_inn.keys()) + list(home_inn.keys()) + [0])
@@ -482,9 +482,10 @@ def _handle_live(event, user_id: str):
                     pitching_list = json.loads(pitch_raw) if isinstance(pitch_raw, str) else (pitch_raw or [])
                     pitchers = []
                     for p in pitching_list[:4]:
+                        vh = int(float(p.get("VisitingHomeType", 0) or 0))
                         pitchers.append({
                             "name": p.get("PitcherName", "") or p.get("PlayerName", ""),
-                            "team": "home" if str(p.get("VisitingHomeType", "0")) == "2" else "away",
+                            "team": "home" if vh == 2 else "away",
                             "ip": f"{int(p.get('InningPitchedCnt', 0) or 0)}.{int(p.get('InningPitchedDiv3Cnt', 0) or 0)}",
                             "strikeouts": int(p.get("StrikeOutCnt", 0) or 0),
                         })
