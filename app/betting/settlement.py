@@ -55,15 +55,20 @@ def settle_game(game_id: str, boxscore: dict | None = None) -> dict:
     settled = 0
     total_payout = 0
 
-    # Rule-based settlement
+    # Rule-based settlement (fallback to AI if rule crashes)
     for bet in rule_bets:
-        outcome, payout, reason = _rule_evaluate(bet, game, boxscore)
+        try:
+            outcome, payout, reason = _rule_evaluate(bet, game, boxscore)
+        except Exception as e:
+            logger.warning(f"Rule evaluate failed for bet {bet.get('id')}: {e}, fallback to AI")
+            ai_bets.append(bet)
+            continue
         _apply_settlement(bet, game_id, outcome, payout, reason)
         settled += 1
         if outcome == "won":
             total_payout += payout
 
-    # AI settlement for custom bets
+    # AI settlement for custom bets (and rule-failed bets)
     if ai_bets and boxscore:
         ai_results = _ai_evaluate_bets(ai_bets, game, boxscore)
         for bet, result_tuple in zip(ai_bets, ai_results):
@@ -213,8 +218,11 @@ def _rule_evaluate(bet: dict, game: dict, boxscore: dict | None) -> tuple[str, i
             return ("refunded", amount, f"{reason}，平盤退款")
         return ("lost", 0, reason)
 
-    # Spread
+    # Spread - check if it's actually win_margin format (贏X分)
     if bet_type == "spread":
+        if "贏" in selection:
+            # This is win_margin, not standard spread
+            return _eval_win_margin(selection, odds, amount, {"winning_margin": abs(home_score - away_score), "home_score": home_score, "away_score": away_score, "home_team_name": home_name, "away_team_name": away_name})
         line = _extract_number(selection)
         if line is None:
             return ("lost", 0, "無法解析讓分線")
@@ -285,19 +293,60 @@ def _eval_total_hr(selection, odds, amount, bs):
 
 
 def _eval_win_margin(selection, odds, amount, bs):
-    margin = bs.get("winning_margin", 0)
-    reason = f"實際勝分差: {margin}分"
-    if "1-2" in selection and 1 <= margin <= 2:
-        return ("won", round(amount * odds), reason)
-    elif ("3" in selection and ("以上" in selection or "及以上" in selection)) and margin >= 3:
-        return ("won", round(amount * odds), reason)
+    import re as _re
+    actual_margin = bs.get("winning_margin", 0)
+    home_score = bs.get("home_score", 0)
+    away_score = bs.get("away_score", 0)
+    home_name = bs.get("home_team_name", "")
+    away_name = bs.get("away_team_name", "")
+
+    # Determine who actually won
+    actual_winner_is_home = home_score > away_score
+
+    # Determine which team the bet is on
+    bet_on_home = home_name and home_name in selection
+    bet_on_away = away_name and away_name in selection
+
+    # Check if the bet's team won
+    bet_team_won = (bet_on_home and actual_winner_is_home) or (bet_on_away and not actual_winner_is_home)
+
+    reason = f"實際勝分差: {actual_margin}分"
+
+    # No team specified = just check margin regardless of who won
+    no_team = not bet_on_home and not bet_on_away
+
+    # Parse range like "1-2分" or "1-3分"
+    range_match = _re.search(r"(\d+)\s*[-~]\s*(\d+)", selection)
+    if range_match:
+        low = int(range_match.group(1))
+        high = int(range_match.group(2))
+        if no_team:
+            # No team specified, just check margin
+            if low <= actual_margin <= high:
+                return ("won", round(amount * odds), reason)
+        else:
+            if bet_team_won and low <= actual_margin <= high:
+                return ("won", round(amount * odds), reason)
+        return ("lost", 0, reason)
+
+    # Parse "X分以上" or "大於X"
+    if "以上" in selection or "大於" in selection:
+        line = _extract_number(selection)
+        if line is not None:
+            if no_team and actual_margin >= line:
+                return ("won", round(amount * odds), reason)
+            elif bet_team_won and actual_margin >= line:
+                return ("won", round(amount * odds), reason)
+        return ("lost", 0, reason)
+
     # Generic over/under
     line = _extract_number(selection)
     if line is not None:
-        if ("大" in selection or "over" in selection.lower()) and margin > line:
+        if ("大" in selection or "over" in selection.lower()) and actual_margin > line:
             return ("won", round(amount * odds), reason)
-        elif ("小" in selection or "under" in selection.lower()) and margin < line:
+        elif ("小" in selection or "under" in selection.lower()) and actual_margin < line:
             return ("won", round(amount * odds), reason)
+
     return ("lost", 0, reason)
 
 
