@@ -435,7 +435,7 @@ def _build_analysis_card(game: dict, bs: dict, summary: str = "") -> dict | None
             "cornerRadius": "md",
             "paddingAll": "12px",
             "contents": [
-                {"type": "text", "text": "🤖 AI 賽評", "size": "xs", "color": "#F39C12", "weight": "bold"},
+                {"type": "text", "text": "TAKAMEI 賽評", "size": "xs", "color": "#F39C12", "weight": "bold"},
                 {"type": "text", "text": summary, "size": "sm", "color": "#CCCCCC", "wrap": True, "margin": "sm"},
             ],
         })
