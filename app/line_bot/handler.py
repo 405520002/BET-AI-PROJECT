@@ -379,8 +379,8 @@ def _handle_live(event, user_id: str):
     # Rate limit: 2 minutes per user
     now = datetime.now()
     last = _live_rate_limit.get(user_id)
-    if last and (now - last).total_seconds() < 120:
-        remaining = 120 - int((now - last).total_seconds())
+    if last and (now - last).total_seconds() < 10:
+        remaining = 10 - int((now - last).total_seconds())
         _reply(event.reply_token, [flex_messages.build_error_message(f"請等 {remaining} 秒後再查詢即時比分")])
         return
 
