@@ -534,16 +534,24 @@ def _handle_live(event, user_id: str):
                             "max_speed": int(p.get("GameHigherSpeedPitch", 0) or 0),
                         })
 
-                    # Current at-bat from LiveLog
+                    # Current at-bat + bases from LiveLog
                     log_raw = data.get("LiveLogJson") or "[]"
                     log_list = json.loads(log_raw) if isinstance(log_raw, str) else (log_raw or [])
                     current_ab = {}
                     if log_list:
                         last = log_list[-1]
+                        # VisitingHomeType in LiveLog: 1=客隊打, 2=主隊打
+                        batting_side = "home" if int(float(last.get("VisitingHomeType", 0) or 0)) == 2 else "away"
                         current_ab = {
                             "hitter": last.get("HitterName", ""),
                             "pitcher": last.get("PitcherName", ""),
                             "count": f"{last.get('StrikeCnt', 0)}-{last.get('BallCnt', 0)}",
+                            "outs": int(last.get("OutCnt", 0) or 0),
+                            "base1": bool(last.get("FirstBase", "")),
+                            "base2": bool(last.get("SecondBase", "")),
+                            "base3": bool(last.get("ThirdBase", "")),
+                            "batting_side": batting_side,  # which team is batting
+                            "inning": int(float(last.get("InningSeq", 0) or 0)),
                         }
 
                     live_games.append({
