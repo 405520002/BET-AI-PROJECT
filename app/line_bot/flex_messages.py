@@ -1012,6 +1012,144 @@ def build_upcoming_schedule(games_by_date: dict[str, list[dict]]) -> dict:
     }
 
 
+def build_live_scores(games: list[dict]) -> dict:
+    """Build live score cards with inning-by-inning scoreboard."""
+    bubbles = []
+
+    for g in games:
+        away = g.get("away_team_name", "")
+        home = g.get("home_team_name", "")
+        away_score = g.get("away_score", 0)
+        home_score = g.get("home_score", 0)
+        status_text = g.get("status_text", "")
+        innings = g.get("innings", {})  # {"away": [0,1,0,...], "home": [0,0,2,...]}
+
+        away_innings = innings.get("away", [])
+        home_innings = innings.get("home", [])
+        max_inn = max(len(away_innings), len(home_innings), 1)
+
+        # Build inning header row: 1 2 3 4 5 6 7 8 9 R
+        header_cells = []
+        for i in range(1, max_inn + 1):
+            header_cells.append({
+                "type": "text", "text": str(i), "size": "xxs", "color": "#999999",
+                "align": "center", "flex": 1,
+            })
+        header_cells.append({
+            "type": "text", "text": "R", "size": "xxs", "color": "#FFFFFF",
+            "align": "center", "flex": 1, "weight": "bold",
+        })
+
+        # Away score row
+        away_cells = []
+        for i in range(max_inn):
+            score = str(away_innings[i]) if i < len(away_innings) else "-"
+            away_cells.append({
+                "type": "text", "text": score, "size": "xxs", "color": "#CCCCCC",
+                "align": "center", "flex": 1,
+            })
+        away_cells.append({
+            "type": "text", "text": str(away_score), "size": "sm", "color": "#FFFFFF",
+            "align": "center", "flex": 1, "weight": "bold",
+        })
+
+        # Home score row
+        home_cells = []
+        for i in range(max_inn):
+            score = str(home_innings[i]) if i < len(home_innings) else "-"
+            home_cells.append({
+                "type": "text", "text": score, "size": "xxs", "color": "#CCCCCC",
+                "align": "center", "flex": 1,
+            })
+        home_cells.append({
+            "type": "text", "text": str(home_score), "size": "sm", "color": "#FFFFFF",
+            "align": "center", "flex": 1, "weight": "bold",
+        })
+
+        # Pitchers info
+        pitchers = g.get("pitchers", [])
+        pitcher_rows = []
+        for p in pitchers[:2]:
+            side = "投" if p.get("team") == "home" else "投"
+            pitcher_rows.append({
+                "type": "text",
+                "text": f"{'主' if p.get('team')=='home' else '客'}{side} {p.get('name','')} {p.get('ip','')}局 {p.get('strikeouts',0)}K",
+                "size": "xxs", "color": "#AAAAAA",
+            })
+
+        bubble = {
+            "type": "bubble",
+            "size": "mega",
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "backgroundColor": "#1B2838",
+                "paddingAll": "15px",
+                "contents": [
+                    # Status badge
+                    {
+                        "type": "box",
+                        "layout": "horizontal",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": status_text or "進行中",
+                                "size": "xs",
+                                "color": "#F39C12" if "進行" in (status_text or "進行中") else "#27AE60",
+                                "weight": "bold",
+                            },
+                            {"type": "filler"},
+                            {"type": "text", "text": g.get("venue", ""), "size": "xxs", "color": "#888888", "align": "end"},
+                        ],
+                    },
+                    {"type": "separator", "margin": "md", "color": "#333333"},
+                    # Inning header
+                    {
+                        "type": "box", "layout": "horizontal", "margin": "md",
+                        "contents": [
+                            {"type": "text", "text": "", "size": "xxs", "flex": 3},
+                            *header_cells,
+                        ],
+                    },
+                    # Away team row
+                    {
+                        "type": "box", "layout": "horizontal", "margin": "sm",
+                        "contents": [
+                            {"type": "text", "text": away, "size": "xs", "color": "#FFFFFF", "flex": 3, "weight": "bold"},
+                            *away_cells,
+                        ],
+                    },
+                    # Home team row
+                    {
+                        "type": "box", "layout": "horizontal", "margin": "sm",
+                        "contents": [
+                            {"type": "text", "text": home, "size": "xs", "color": "#FFFFFF", "flex": 3, "weight": "bold"},
+                            *home_cells,
+                        ],
+                    },
+                    {"type": "separator", "margin": "md", "color": "#333333"},
+                    # Pitcher info
+                    *(
+                        [{
+                            "type": "box", "layout": "vertical", "margin": "md",
+                            "contents": pitcher_rows,
+                        }] if pitcher_rows else []
+                    ),
+                ],
+            },
+        }
+        bubbles.append(bubble)
+
+    return {
+        "type": "flex",
+        "altText": "即時比分",
+        "contents": {
+            "type": "carousel",
+            "contents": bubbles[:10],
+        },
+    }
+
+
 def build_success_message(text: str) -> dict:
     """Simple success text message."""
     return {"type": "text", "text": f"✅ {text}"}

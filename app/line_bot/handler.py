@@ -161,6 +161,8 @@ def handle_text_message(event: MessageEvent):
         _handle_recent_results(event)
     elif cmd == "upcoming":
         _handle_upcoming(event)
+    elif cmd == "live":
+        _handle_live(event, user_id)
     elif cmd == "help":
         _handle_help(event)
     else:
@@ -351,6 +353,160 @@ def _handle_upcoming(event):
 
     msg = flex_messages.build_upcoming_schedule(games_by_date)
     _reply(event.reply_token, [msg])
+
+
+_live_rate_limit: dict[str, datetime] = {}  # user_id -> last request time
+
+
+def _handle_live(event, user_id: str):
+    """Show live scores with 2-min per-user rate limit."""
+    import json
+    import re
+    from app.db.client import get_db
+    from app.scraper.cpbl_schedule import _to_chinese_name, _to_chinese_venue
+
+    # Rate limit: 2 minutes per user
+    now = datetime.now()
+    last = _live_rate_limit.get(user_id)
+    if last and (now - last).total_seconds() < 120:
+        remaining = 120 - int((now - last).total_seconds())
+        _reply(event.reply_token, [flex_messages.build_error_message(f"請等 {remaining} 秒後再查詢即時比分")])
+        return
+
+    # Check DB cache first (shared across users, 2 min TTL)
+    db = get_db()
+    cached = db["cache"].find_one({"_id": "live_scores"})
+    if cached and cached.get("updated_at"):
+        cache_age = (now - cached["updated_at"]).total_seconds()
+        if cache_age < 120 and cached.get("data"):
+            _live_rate_limit[user_id] = now
+            if not cached["data"]:
+                _reply(event.reply_token, ["目前沒有進行中的比賽"])
+                return
+            msg = flex_messages.build_live_scores(cached["data"])
+            _reply(event.reply_token, [msg])
+            return
+
+    # Scrape fresh live data
+    try:
+        import httpx
+        from app.scraper.http_client import _browser_headers
+
+        headers = _browser_headers("https://en.cpbl.com.tw/")
+
+        # Get today's game SNOs from DB
+        today_str = now.strftime("%Y-%m-%d")
+        today_games = list(db["games"].find({"date": today_str}))
+
+        if not today_games:
+            _live_rate_limit[user_id] = now
+            _reply(event.reply_token, ["今日沒有賽事"])
+            return
+
+        # Get token from box page
+        r = httpx.get("https://en.cpbl.com.tw/box", headers=headers, follow_redirects=True, timeout=15)
+        token_match = re.search(r'__RequestVerificationToken.*?value="([^"]+)"', r.text)
+        if not token_match:
+            token_match = re.search(r"RequestVerificationToken:\s*'([A-Za-z0-9_\-:]+)'", r.text)
+        token = token_match.group(1) if token_match else ""
+
+        live_games = []
+        for game in today_games:
+            sno = game.get("game_sno")
+            if not sno:
+                continue
+
+            try:
+                r2 = httpx.post(
+                    "https://en.cpbl.com.tw/box/getlive",
+                    data={"gameSno": str(sno), "year": str(now.year), "kindCode": "A"},
+                    headers={
+                        **headers,
+                        "RequestVerificationToken": token,
+                        "X-Requested-With": "XMLHttpRequest",
+                        "Content-Type": "application/x-www-form-urlencoded",
+                    },
+                    cookies=dict(r.cookies),
+                    follow_redirects=True,
+                    timeout=15,
+                )
+
+                if r2.status_code != 200:
+                    continue
+
+                data = r2.json()
+                gd_list = json.loads(data.get("GameDetailJson", "[]"))
+                if not gd_list:
+                    continue
+                gd = gd_list[0] if isinstance(gd_list, list) else gd_list
+
+                # Parse scoreboard
+                sb_list = json.loads(data.get("ScoreboardJson", "[]"))
+                away_inn = {}
+                home_inn = {}
+                for item in sb_list:
+                    inning = item.get("Inning", 0)
+                    score = item.get("Score", 0) or 0
+                    vh = item.get("VisitingHomeType", 0)
+                    if vh == 1:
+                        away_inn[inning] = score
+                    elif vh == 2:
+                        home_inn[inning] = score
+
+                max_inning = max(list(away_inn.keys()) + list(home_inn.keys()) + [0])
+                away_scores = [away_inn.get(i, 0) for i in range(1, max_inning + 1)]
+                home_scores = [home_inn.get(i, 0) for i in range(1, max_inning + 1)]
+
+                # Parse pitchers
+                pitching_list = json.loads(data.get("PitchingJson", "[]"))
+                pitchers = []
+                for p in pitching_list[:4]:
+                    pitchers.append({
+                        "name": p.get("PitcherName", "") or p.get("PlayerName", ""),
+                        "team": "home" if p.get("VisitingHomeType") == 2 else "away",
+                        "ip": f"{p.get('InningPitchedCnt', 0) or 0}.{p.get('InningPitchedDiv3Cnt', 0) or 0}",
+                        "strikeouts": p.get("StrikeOutCnt", 0) or 0,
+                    })
+
+                # Determine status text
+                game_status = gd.get("GameStatusChi", "")
+                if not game_status:
+                    gs_code = gd.get("GameStatus", 0)
+                    game_status = {0: "未開始", 1: "比賽中", 2: "比賽中", 3: "比賽結束"}.get(gs_code, "")
+
+                live_games.append({
+                    "away_team_name": _to_chinese_name(gd.get("VisitingTeamName", "")),
+                    "home_team_name": _to_chinese_name(gd.get("HomeTeamName", "")),
+                    "away_score": gd.get("VisitingTotalScore", 0) or 0,
+                    "home_score": gd.get("HomeTotalScore", 0) or 0,
+                    "venue": _to_chinese_venue(gd.get("FieldAbbe", game.get("venue", ""))),
+                    "status_text": game_status,
+                    "innings": {"away": away_scores, "home": home_scores},
+                    "pitchers": pitchers,
+                })
+
+            except Exception as e:
+                logger.warning(f"Live score failed for sno {sno}: {e}")
+
+        # Cache for 2 min
+        db["cache"].update_one(
+            {"_id": "live_scores"},
+            {"$set": {"data": live_games, "updated_at": now}},
+            upsert=True,
+        )
+
+        _live_rate_limit[user_id] = now
+
+        if not live_games:
+            _reply(event.reply_token, ["目前沒有進行中的比賽"])
+            return
+
+        msg = flex_messages.build_live_scores(live_games)
+        _reply(event.reply_token, [msg])
+
+    except Exception as e:
+        logger.error(f"Live score error: {e}")
+        _reply(event.reply_token, [flex_messages.build_error_message("無法取得即時比分")])
 
 
 def _handle_recent_results(event):
