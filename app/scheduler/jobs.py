@@ -111,7 +111,59 @@ async def morning_job():
         game_repo.upsert_game(gid, game)
         logger.info(f"[08:00] {game.get('away_team_name','')} vs {game.get('home_team_name','')}: {len(game['odds'].get('markets',[]))} markets")
 
+    # Push today's games to all users
+    _push_today_games(scheduled)
+
     return {"games": len(scheduled), "finished_stored": len(finished)}
+
+
+def _push_today_games(games: list[dict]):
+    """Push today's games summary to all registered users."""
+    from linebot.v3.messaging import (
+        ApiClient, Configuration, MessagingApi,
+        PushMessageRequest, TextMessage,
+    )
+    from app.config import settings
+
+    if not games:
+        return
+
+    # Build message
+    lines = [f"⚾ 今日有 {len(games)} 場比賽！\n"]
+    for g in games:
+        away = g.get("away_team_name", "")
+        home = g.get("home_team_name", "")
+        venue = g.get("venue", "")
+        game_time = g.get("game_time", "")
+        markets_count = len(g.get("odds", {}).get("markets", []))
+        lines.append(f"🏟️ {away} vs {home}")
+        lines.append(f"   📍{venue}  ⏰{game_time}  🎰{markets_count}個玩法")
+    lines.append("\n點選「今日賽事」查看盤口和下注！")
+    msg_text = "\n".join(lines)
+
+    # Get all users
+    db = get_db()
+    users = list(db["users"].find({}, {"_id": 1}))
+
+    if not users:
+        return
+
+    configuration = Configuration(access_token=settings.line_channel_access_token)
+    sent = 0
+
+    with ApiClient(configuration) as api_client:
+        api = MessagingApi(api_client)
+        for user in users:
+            try:
+                api.push_message(PushMessageRequest(
+                    to=user["_id"],
+                    messages=[TextMessage(text=msg_text)],
+                ))
+                sent += 1
+            except Exception as e:
+                logger.warning(f"Push failed for {user['_id'][:10]}...: {e}")
+
+    logger.info(f"[08:00] Pushed today's games to {sent}/{len(users)} users")
 
 
 async def midday_update():
