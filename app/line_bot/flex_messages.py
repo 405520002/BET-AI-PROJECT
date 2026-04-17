@@ -1162,13 +1162,15 @@ def build_live_scores(games: list[dict]) -> dict:
                     stats += f" {hitter_data['rbi']}打點"
                 if hitter_data.get("runs", 0) > 0:
                     stats += f" {hitter_data['runs']}得分"
-                batter_rows.append({
-                    "type": "box", "layout": "horizontal",
-                    "contents": [
-                        {"type": "text", "text": f"🏏 {hitter_name}", "size": "xs", "color": "#E74C3C", "flex": 3},
-                        {"type": "text", "text": stats, "size": "xs", "color": "#FFFFFF", "align": "end", "flex": 4, "weight": "bold"},
-                    ],
-                })
+            else:
+                stats = "本場尚無安打"
+            batter_rows.append({
+                "type": "box", "layout": "horizontal",
+                "contents": [
+                    {"type": "text", "text": f"🏏 {hitter_name}", "size": "xs", "color": "#E74C3C", "flex": 3},
+                    {"type": "text", "text": stats, "size": "xs", "color": "#FFFFFF", "align": "end", "flex": 4, "weight": "bold"},
+                ],
+            })
 
         # Weather + audience
         weather = g.get("weather", "")
