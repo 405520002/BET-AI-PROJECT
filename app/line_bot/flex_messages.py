@@ -1040,8 +1040,8 @@ def build_live_scores(games: list[dict]) -> dict:
     bubbles = []
 
     for g in games:
-        away = g.get("away_team_name", "")
-        home = g.get("home_team_name", "")
+        away = g.get("away_team_name", "") or "客隊"
+        home = g.get("home_team_name", "") or "主隊"
         away_score = g.get("away_score", 0)
         home_score = g.get("home_score", 0)
         status_text = g.get("status_text", "")
@@ -1074,7 +1074,7 @@ def build_live_scores(games: list[dict]) -> dict:
             home_cells.append({"type": "text", "text": str(home_score), "size": "sm", "color": "#FFFFFF", "align": "center", "flex": 1, "weight": "bold"})
 
             scoreboard_rows = [
-                {"type": "box", "layout": "horizontal", "margin": "md", "contents": [{"type": "text", "text": "", "size": "xxs", "flex": 3}] + header_cells},
+                {"type": "box", "layout": "horizontal", "margin": "md", "contents": [{"type": "text", "text": " ", "size": "xxs", "flex": 3}] + header_cells},
                 {"type": "box", "layout": "horizontal", "margin": "sm", "contents": [{"type": "text", "text": away, "size": "xs", "color": "#FFFFFF", "flex": 3, "weight": "bold"}] + away_cells},
                 {"type": "box", "layout": "horizontal", "margin": "sm", "contents": [{"type": "text", "text": home, "size": "xs", "color": "#FFFFFF", "flex": 3, "weight": "bold"}] + home_cells},
             ]
@@ -1097,12 +1097,15 @@ def build_live_scores(games: list[dict]) -> dict:
         pitchers = g.get("pitchers", [])
         pitcher_rows = []
         for p in pitchers[:2]:
-            side = "投" if p.get("team") == "home" else "投"
-            pitcher_rows.append({
-                "type": "text",
-                "text": f"{'主' if p.get('team')=='home' else '客'}{side} {p.get('name','')} {p.get('ip','')}局 {p.get('strikeouts',0)}K",
-                "size": "xxs", "color": "#AAAAAA",
-            })
+            name = p.get("name", "") or "---"
+            side = "主" if p.get("team") == "home" else "客"
+            text = f"{side}投 {name} {p.get('ip','')}局 {p.get('strikeouts',0)}K"
+            if text.strip():
+                pitcher_rows.append({
+                    "type": "text",
+                    "text": text,
+                    "size": "xxs", "color": "#AAAAAA",
+                })
 
         bubble = {
             "type": "bubble",
