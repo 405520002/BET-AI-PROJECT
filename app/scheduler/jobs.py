@@ -576,8 +576,9 @@ async def midday_update():
             logger.info(f"[12:00] New game added: {gid}")
         updated += 1
 
-    # Push TAKAMEI reminder
-    _push_takamei_reminder()
+    # Push TAKAMEI reminder (only if there are games today)
+    if updated > 0:
+        _push_takamei_reminder()
 
     return {"updated": updated}
 
