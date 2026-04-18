@@ -534,13 +534,7 @@ def _push_takamei_reminder():
             try:
                 api.push_message(PushMessageRequest(
                     to=user["_id"],
-                    messages=[
-                        TextMessage(text=f"🐾 TAKAMEI提醒 {name}:\n\n{mascot_msg}"),
-                        FlexMessage(
-                            alt_text="功能說明",
-                            contents=FlexContainer.from_dict(help_msg["contents"]),
-                        ),
-                    ],
+                    messages=[TextMessage(text=f"🐾 TAKAMEI提醒 {name}:\n\n{mascot_msg}\n\n👇 點下方功能開始玩")],
                 ))
                 sent += 1
             except Exception as e:
