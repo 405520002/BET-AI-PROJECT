@@ -588,13 +588,28 @@ def build_my_bets(bets: list[dict]) -> dict:
                      "color": "#555555", "align": "end", "weight": "bold"},
                 ],
             },
+            # Game + date
+            {
+                "type": "text",
+                "text": f"{b.get('game_date', '')[:10]}",
+                "size": "xs",
+                "color": "#999999",
+                "margin": "lg",
+            },
+            {
+                "type": "text",
+                "text": _get_game_matchup(b.get("game_id", "")),
+                "size": "sm",
+                "color": "#555555",
+                "margin": "xs",
+            },
             # Market name
             {
                 "type": "text",
                 "text": b.get("market_name", ""),
                 "weight": "bold",
                 "size": "md",
-                "margin": "lg",
+                "margin": "sm",
                 "wrap": True,
             },
             # Selection + odds
@@ -1652,6 +1667,18 @@ def build_error_message(text: str) -> dict:
 
 
 # --- helpers ---
+
+def _get_game_matchup(game_id: str) -> str:
+    """Get 'away vs home' from game_id."""
+    try:
+        from app.db import game_repo
+        game = game_repo.get_game(game_id)
+        if game:
+            return f"{game.get('away_team_name', '')} vs {game.get('home_team_name', '')}"
+    except Exception:
+        pass
+    return game_id
+
 
 def _kv_row(key: str, value: str) -> dict:
     return {
