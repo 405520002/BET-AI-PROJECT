@@ -121,33 +121,63 @@ async def morning_job():
 
 
 def _push_today_games(games: list[dict]):
-    """Push today's games summary to all registered users."""
+    """Push today's games summary with quick action button."""
     from linebot.v3.messaging import (
         ApiClient, Configuration, MessagingApi,
-        PushMessageRequest, TextMessage,
+        PushMessageRequest, FlexMessage, FlexContainer,
     )
     from app.config import settings
 
     if not games:
         return
 
-    # Build message
-    lines = [f"⚾ 今日有 {len(games)} 場比賽！\n"]
+    # Build game rows
+    game_rows = []
     for g in games:
         away = g.get("away_team_name", "")
         home = g.get("home_team_name", "")
         venue = g.get("venue", "")
         game_time = g.get("game_time", "")
         markets_count = len(g.get("odds", {}).get("markets", []))
-        lines.append(f"🏟️ {away} vs {home}")
-        lines.append(f"   📍{venue}  ⏰{game_time}  🎰{markets_count}個玩法")
-    lines.append("\n點選「今日賽事」查看盤口和下注！")
-    msg_text = "\n".join(lines)
+        game_rows.append({
+            "type": "box", "layout": "vertical", "margin": "lg",
+            "contents": [
+                {"type": "text", "text": f"🏟️ {away} vs {home}", "size": "sm", "color": "#FFFFFF", "weight": "bold"},
+                {"type": "text", "text": f"📍{venue}  ⏰{game_time}  🎰{markets_count}個玩法", "size": "xs", "color": "#AAAAAA", "margin": "xs"},
+            ],
+        })
 
-    # Get all users
+    flex_data = {
+        "type": "bubble",
+        "body": {
+            "type": "box",
+            "layout": "vertical",
+            "backgroundColor": "#1B2838",
+            "paddingAll": "15px",
+            "contents": [
+                {"type": "text", "text": f"⚾ 今日有 {len(games)} 場比賽！", "size": "lg", "weight": "bold", "color": "#F39C12"},
+                {"type": "separator", "margin": "lg", "color": "#333333"},
+                *game_rows,
+            ],
+        },
+        "footer": {
+            "type": "box",
+            "layout": "vertical",
+            "backgroundColor": "#1B2838",
+            "contents": [
+                {
+                    "type": "button",
+                    "action": {"type": "message", "label": "查看盤口 & 下注", "text": "今日賽事"},
+                    "style": "primary",
+                    "color": "#2C3E50",
+                    "height": "md",
+                },
+            ],
+        },
+    }
+
     db = get_db()
     users = list(db["users"].find({}, {"_id": 1}))
-
     if not users:
         return
 
@@ -160,7 +190,10 @@ def _push_today_games(games: list[dict]):
             try:
                 api.push_message(PushMessageRequest(
                     to=user["_id"],
-                    messages=[TextMessage(text=msg_text)],
+                    messages=[FlexMessage(
+                        alt_text=f"⚾ 今日有 {len(games)} 場比賽！",
+                        contents=FlexContainer.from_dict(flex_data),
+                    )],
                 ))
                 sent += 1
             except Exception as e:
