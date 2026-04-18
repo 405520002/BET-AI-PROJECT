@@ -589,17 +589,20 @@ async def send_pending_notifications():
     now = datetime.now()
     db = get_db()
 
-    # Find due notifications
-    due = list(db["notifications"].find({"notify_at": {"$lte": now}, "sent": False}))
-    if not due:
-        return {"notified": 0}
-
+    # Atomically claim due notifications (prevents duplicate sends across workers)
     configuration = Configuration(access_token=settings.line_channel_access_token)
     notified = 0
 
     with ApiClient(configuration) as api_client:
         api = MessagingApi(api_client)
-        for n in due:
+        while True:
+            # find_one_and_update: atomically find + mark sent
+            n = db["notifications"].find_one_and_update(
+                {"notify_at": {"$lte": now}, "sent": False},
+                {"$set": {"sent": True}},
+            )
+            if not n:
+                break
             info = n.get("game_info", {})
             away = info.get("away_team_name", "")
             home = info.get("home_team_name", "")
@@ -623,8 +626,7 @@ async def send_pending_notifications():
             except Exception as e:
                 logger.warning(f"Push notify failed: {e}")
 
-            # Mark sent
-            db["notifications"].update_one({"_id": n["_id"]}, {"$set": {"sent": True}})
+            # Already marked sent by find_one_and_update above
 
     return {"notified": notified}
 
