@@ -499,37 +499,37 @@ def _push_takamei_reminder():
     configuration = Configuration(access_token=settings.line_channel_access_token)
     sent = 0
 
-    with ApiClient(configuration) as api_client:
-        api = MessagingApi(api_client)
-        for user in users:
-            name = user.get("display_name", "") or "朋友"
-
-            # Generate personalized mascot message
-            try:
-                r = client.chat.completions.create(
-                    model="arcee-ai/trinity-large-preview:free",
-                    messages=[{"role": "user", "content": f"""你是TAKAMEI，中華職棒虛擬下注平台的可愛吉祥物。
-請用可愛、活潑、有趣的語調寫一段提醒訊息給「{name}」。
+    # Generate one template with AI (use {NAME} as placeholder)
+    try:
+        r = client.chat.completions.create(
+            model="arcee-ai/trinity-large-preview:free",
+            messages=[{"role": "user", "content": """你是TAKAMEI，中華職棒虛擬下注平台的可愛吉祥物。
+請用可愛、活潑、有趣的語調寫一段提醒訊息。
 
 要求：
 - 繁體中文，3-4句話，100字以內
 - 語調像可愛的動物吉祥物（用「~」「！」「喔」「呢」等語氣詞）
 - 提醒今天有比賽可以下注
-- 鼓勵他來玩，但不要太強迫
+- 鼓勵來玩，但不要太強迫
 - 可以加一點棒球梗或可愛的表情描述
-- 開頭要叫他的名字
+- 開頭用 {NAME} 當作名字的佔位符（例如：{NAME}～今天...）
 - 可以適當使用 emoji 增加可愛感
 
 直接寫訊息，不要加標題。"""}],
-                    temperature=0.9,
-                    max_tokens=200,
-                )
-                mascot_msg = r.choices[0].message.content.strip()
-            except Exception:
-                mascot_msg = f"{name}~今天也有精彩的中職比賽喔！快來看看今日賽事，說不定會有意想不到的好盤口呢！TAKAMEI在這裡等你來挑戰~"
+            temperature=0.9,
+            max_tokens=200,
+        )
+        template = r.choices[0].message.content.strip()
+    except Exception:
+        template = "{NAME}～今天也有精彩的中職比賽喔！⚾ 快來看看今日賽事，說不定會有意想不到的好盤口呢！TAKAMEI在這裡等你來挑戰～💪"
 
-            # Build help cards
-            help_msg = build_help()
+    help_msg = build_help()
+
+    with ApiClient(configuration) as api_client:
+        api = MessagingApi(api_client)
+        for user in users:
+            name = user.get("display_name", "") or "朋友"
+            mascot_msg = template.replace("{NAME}", name)
 
             try:
                 api.push_message(PushMessageRequest(
