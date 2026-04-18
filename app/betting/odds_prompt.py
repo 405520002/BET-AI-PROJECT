@@ -85,10 +85,11 @@ GAME IDS: {game_ids}
 OUTPUT FORMAT - Return ONLY a valid JSON array, starting with [ and ending with ]. No markdown, no explanation.
 
 Each element:
-{{"game_id": "the_game_id", "markets": [{{"type": "USE_EXACT_TYPE_FROM_LIST_ABOVE", "name": "中文名稱", "description": "中文說明", "options": [{{"label": "中文選項", "odds": 1.85}}]}}]}}
+{{"game_id": "the_game_id", "markets": [{{"type": "USE_EXACT_TYPE_FROM_LIST_ABOVE", "name": "中文名稱", "description": "設計理由(20-50字,必須引用具體數據如勝率ERA戰績等)", "options": [{{"label": "中文選項", "odds": 1.85}}]}}]}}
 
 Rules:
 - type MUST be one of the exact values listed above
+- description MUST include reasoning with data (20-50 characters, must cite specific stats)
 - All name/description/label must be in Traditional Chinese
 - odds must be numbers (not strings)
 - No trailing commas
@@ -110,13 +111,13 @@ DESIGN:
 OUTPUT - Return ONLY a valid JSON array with one object for this game. No markdown, no explanation.
 
 Format:
-[{{"game_id": "{game_id}", "markets": [{{"type": "USE_EXACT_TYPE_FROM_LIST_ABOVE", "name": "中文名稱", "description": "中文說明(30字內)", "options": [{{"label": "中文選項", "odds": 1.85}}]}}]}}]
+[{{"game_id": "{game_id}", "markets": [{{"type": "USE_EXACT_TYPE_FROM_LIST_ABOVE", "name": "中文名稱", "description": "設計理由(用數據說明,40字內)", "options": [{{"label": "中文選項", "odds": 1.85}}]}}]}}]
 
 Rules:
 - type MUST be one of the exact values listed above (moneyline, over_under, spread, first_inning, total_hr, win_margin, pitcher_k, pitcher_er, team_hits, team_runs, custom)
+- description MUST include reasoning from the design (stats, trends, matchup)
 - All text in Traditional Chinese
 - odds must be numbers
-- description must be under 30 characters
 - No trailing commas
 
 Start with [ immediately."""
