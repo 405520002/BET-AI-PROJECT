@@ -1071,22 +1071,33 @@ def build_live_scores(games: list[dict]) -> dict:
         if has_innings:
             max_inn = max(len(away_innings), len(home_innings), 1)
 
+            away_hits = g.get("away_hits", 0)
+            home_hits = g.get("home_hits", 0)
+            away_errors = g.get("away_errors", 0)
+            home_errors = g.get("home_errors", 0)
+
             header_cells = []
             for i in range(1, max_inn + 1):
                 header_cells.append({"type": "text", "text": str(i), "size": "xxs", "color": "#999999", "align": "center", "flex": 1})
-            header_cells.append({"type": "text", "text": "R", "size": "xxs", "color": "#FFFFFF", "align": "center", "flex": 1, "weight": "bold"})
+            header_cells.append({"type": "text", "text": "R", "size": "xxs", "color": "#F39C12", "align": "center", "flex": 1, "weight": "bold"})
+            header_cells.append({"type": "text", "text": "H", "size": "xxs", "color": "#3498DB", "align": "center", "flex": 1, "weight": "bold"})
+            header_cells.append({"type": "text", "text": "E", "size": "xxs", "color": "#E74C3C", "align": "center", "flex": 1, "weight": "bold"})
 
             away_cells = []
             for i in range(max_inn):
                 score = str(away_innings[i]) if i < len(away_innings) else "-"
                 away_cells.append({"type": "text", "text": score, "size": "xxs", "color": "#CCCCCC", "align": "center", "flex": 1})
-            away_cells.append({"type": "text", "text": str(away_score), "size": "sm", "color": "#FFFFFF", "align": "center", "flex": 1, "weight": "bold"})
+            away_cells.append({"type": "text", "text": str(away_score), "size": "sm", "color": "#F39C12", "align": "center", "flex": 1, "weight": "bold"})
+            away_cells.append({"type": "text", "text": str(away_hits), "size": "xxs", "color": "#3498DB", "align": "center", "flex": 1})
+            away_cells.append({"type": "text", "text": str(away_errors), "size": "xxs", "color": "#E74C3C", "align": "center", "flex": 1})
 
             home_cells = []
             for i in range(max_inn):
                 score = str(home_innings[i]) if i < len(home_innings) else "-"
                 home_cells.append({"type": "text", "text": score, "size": "xxs", "color": "#CCCCCC", "align": "center", "flex": 1})
-            home_cells.append({"type": "text", "text": str(home_score), "size": "sm", "color": "#FFFFFF", "align": "center", "flex": 1, "weight": "bold"})
+            home_cells.append({"type": "text", "text": str(home_score), "size": "sm", "color": "#F39C12", "align": "center", "flex": 1, "weight": "bold"})
+            home_cells.append({"type": "text", "text": str(home_hits), "size": "xxs", "color": "#3498DB", "align": "center", "flex": 1})
+            home_cells.append({"type": "text", "text": str(home_errors), "size": "xxs", "color": "#E74C3C", "align": "center", "flex": 1})
 
             scoreboard_rows = [
                 {"type": "box", "layout": "horizontal", "margin": "md", "contents": [{"type": "text", "text": " ", "size": "xxs", "flex": 3}] + header_cells},

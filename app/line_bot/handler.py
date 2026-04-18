@@ -456,14 +456,24 @@ def _handle_live(event, user_id: str):
                     sb_list = json.loads(sb_raw) if isinstance(sb_raw, str) else (sb_raw or [])
                     away_inn = {}
                     home_inn = {}
+                    away_total_hits = 0
+                    home_total_hits = 0
+                    away_total_errors = 0
+                    home_total_errors = 0
                     for item in sb_list:
                         inning = int(float(item.get("InningSeq", 0) or item.get("Inning", 0) or 0))
                         score = int(float(item.get("ScoreCnt", 0) or item.get("Score", 0) or 0))
+                        hits = int(float(item.get("HittingCnt", 0) or 0))
+                        errors = int(float(item.get("ErrorCnt", 0) or 0))
                         vh = int(float(item.get("VisitingHomeType", 0) or 0))
                         if vh == 1:
                             away_inn[inning] = score
+                            away_total_hits += hits
+                            away_total_errors += errors
                         elif vh == 2:
                             home_inn[inning] = score
+                            home_total_hits += hits
+                            home_total_errors += errors
 
                     max_inning = max(list(away_inn.keys()) + list(home_inn.keys()) + [0])
                     away_scores = [away_inn.get(i, 0) for i in range(1, max_inning + 1)]
@@ -552,6 +562,10 @@ def _handle_live(event, user_id: str):
                         "home_team_name": _to_chinese_name(gd.get("HomeTeamName") or game.get("home_team_name", "")),
                         "away_score": gd.get("VisitingTotalScore", 0) or 0,
                         "home_score": gd.get("HomeTotalScore", 0) or 0,
+                        "away_hits": away_total_hits,
+                        "home_hits": home_total_hits,
+                        "away_errors": away_total_errors,
+                        "home_errors": home_total_errors,
                         "venue": _to_chinese_venue(gd.get("FieldAbbe", game.get("venue", ""))),
                         "status_text": game_status,
                         "weather": gd.get("WeatherDesc", ""),
