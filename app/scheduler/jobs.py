@@ -111,8 +111,11 @@ async def morning_job():
         game_repo.upsert_game(gid, game)
         logger.info(f"[08:00] {game.get('away_team_name','')} vs {game.get('home_team_name','')}: {len(game['odds'].get('markets',[]))} markets")
 
-    # Push today's games to all users
-    _push_today_games(scheduled)
+    # Push today's games to all users (only once per day)
+    push_key = f"today_games_pushed_{today_str}"
+    if not db["cache"].find_one({"_id": push_key}):
+        _push_today_games(scheduled)
+        db["cache"].update_one({"_id": push_key}, {"$set": {"pushed": True}}, upsert=True)
 
     return {"games": len(scheduled), "finished_stored": len(finished)}
 
@@ -565,9 +568,13 @@ async def midnight_settle():
     settle_result = settle_all_games_for_date(today, boxscores)
     logger.info(f"[00:00] Settlement: {settle_result}")
 
-    # Step 4: Push post-game analysis to users who bet
-    if boxscores:
+    # Step 4: Push post-game analysis (only once per day)
+    db = get_db()
+    push_key = f"post_game_pushed_{today}"
+    already_pushed = db["cache"].find_one({"_id": push_key})
+    if boxscores and not already_pushed:
         _push_post_game_analysis(today, boxscores, final_games)
+        db["cache"].update_one({"_id": push_key}, {"$set": {"pushed": True}}, upsert=True)
 
     # Step 5: Update caches (standings, upcoming, finished games)
     await _update_caches_after_settle()
