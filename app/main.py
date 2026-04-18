@@ -37,14 +37,19 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("CPBL Betting Bot starting up")
-    # Start background notification checker
-    from apscheduler.schedulers.background import BackgroundScheduler
-    scheduler = BackgroundScheduler(timezone="Asia/Taipei")
-    scheduler.add_job(_check_notifications, "interval", seconds=30, id="notify_checker")
-    scheduler.start()
-    logger.info("Notification checker started (every 10s)")
+    # Start background notification checker (only in one worker)
+    import os
+    scheduler = None
+    if os.environ.get("NOTIFY_SCHEDULER_STARTED") != "1":
+        os.environ["NOTIFY_SCHEDULER_STARTED"] = "1"
+        from apscheduler.schedulers.background import BackgroundScheduler
+        scheduler = BackgroundScheduler(timezone="Asia/Taipei")
+        scheduler.add_job(_check_notifications, "interval", seconds=30, id="notify_checker")
+        scheduler.start()
+        logger.info("Notification checker started (every 30s)")
     yield
-    scheduler.shutdown()
+    if scheduler:
+        scheduler.shutdown()
     logger.info("CPBL Betting Bot shutting down")
 
 
