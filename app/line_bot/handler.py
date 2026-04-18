@@ -203,6 +203,10 @@ def handle_postback(event: PostbackEvent):
         _reply(event.reply_token, ["請輸入儲值金額 (1 ~ 10,000):"])
     elif data.action == "games":
         _handle_games(event, user_id)
+    elif data.action == "bets_pending":
+        _handle_bets_pending(event, user_id)
+    elif data.action == "bets_settled":
+        _handle_bets_settled(event, user_id)
 
 
 # --- Command Handlers ---
@@ -647,12 +651,28 @@ def _handle_recent_results(event):
 
 
 def _handle_my_bets(event, user_id: str):
-    bets = bet_repo.get_user_bets(user_id, limit=10)
-    if not bets:
-        _reply(event.reply_token, ["你還沒有下注紀錄，輸入「今日賽事」開始玩！"])
-        return
+    pending = list(bet_repo.get_user_bets_by_status(user_id, "pending"))
+    settled_count = bet_repo.count_user_settled_bets(user_id)
 
+    msg = flex_messages.build_bets_menu(len(pending), settled_count)
+    _reply(event.reply_token, [msg])
+
+
+def _handle_bets_pending(event, user_id: str):
+    bets = list(bet_repo.get_user_bets_by_status(user_id, "pending"))
+    if not bets:
+        _reply(event.reply_token, ["目前沒有待結算的注單"])
+        return
     msg = flex_messages.build_my_bets(bets)
+    _reply(event.reply_token, [msg])
+
+
+def _handle_bets_settled(event, user_id: str):
+    bets = bet_repo.get_user_settled_bets(user_id, limit=30)
+    if not bets:
+        _reply(event.reply_token, ["目前沒有已結算的注單"])
+        return
+    msg = flex_messages.build_settled_bets_table(bets)
     _reply(event.reply_token, [msg])
 
 

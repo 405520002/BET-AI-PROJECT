@@ -1522,6 +1522,125 @@ def build_help() -> dict:
     }
 
 
+def build_bets_menu(pending_count: int, settled_count: int) -> dict:
+    """Build bets menu with two buttons: pending and settled."""
+    return {
+        "type": "flex",
+        "altText": "我的注單",
+        "contents": {
+            "type": "bubble",
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {"type": "text", "text": "📋 我的注單", "weight": "bold", "size": "xl"},
+                    {"type": "separator", "margin": "lg"},
+                ],
+            },
+            "footer": {
+                "type": "box",
+                "layout": "vertical",
+                "spacing": "md",
+                "contents": [
+                    {
+                        "type": "button",
+                        "action": {
+                            "type": "postback",
+                            "label": f"⏳ 待結算 ({pending_count} 張)",
+                            "data": "bets_pending",
+                        },
+                        "style": "primary",
+                        "color": "#F39C12",
+                    },
+                    {
+                        "type": "button",
+                        "action": {
+                            "type": "postback",
+                            "label": f"✅ 已結算 ({settled_count} 張)",
+                            "data": "bets_settled",
+                        },
+                        "style": "primary",
+                        "color": "#2C3E50",
+                    },
+                ],
+            },
+        },
+    }
+
+
+def build_settled_bets_table(bets: list[dict]) -> dict:
+    """Build settled bets as a compact table."""
+    rows = []
+
+    # Header
+    rows.append({
+        "type": "box", "layout": "horizontal",
+        "contents": [
+            {"type": "text", "text": "日期", "size": "xxs", "color": "#888888", "flex": 2, "weight": "bold"},
+            {"type": "text", "text": "玩法", "size": "xxs", "color": "#888888", "flex": 3, "weight": "bold"},
+            {"type": "text", "text": "選擇", "size": "xxs", "color": "#888888", "flex": 3, "weight": "bold"},
+            {"type": "text", "text": "損益", "size": "xxs", "color": "#888888", "flex": 2, "weight": "bold", "align": "end"},
+        ],
+    })
+    rows.append({"type": "separator", "margin": "sm"})
+
+    total_profit = 0
+    for b in bets:
+        status = b.get("status", "")
+        profit = b.get("profit", 0)
+        total_profit += profit
+        icon = {"won": "✅", "lost": "❌", "refunded": "🔄"}.get(status, "?")
+        profit_color = "#27AE60" if profit > 0 else "#E74C3C" if profit < 0 else "#888888"
+        profit_text = f"+{profit:,}" if profit > 0 else f"{profit:,}"
+
+        game_date = b.get("game_date", "")
+        short_date = game_date[5:] if len(game_date) >= 10 else game_date  # "04-17"
+        market = b.get("market_name", "")[:6]  # truncate
+        selection = b.get("selection", "")[:6]
+
+        rows.append({
+            "type": "box", "layout": "horizontal", "margin": "sm",
+            "contents": [
+                {"type": "text", "text": short_date, "size": "xxs", "color": "#CCCCCC", "flex": 2},
+                {"type": "text", "text": market, "size": "xxs", "color": "#CCCCCC", "flex": 3},
+                {"type": "text", "text": f"{icon}{selection}", "size": "xxs", "color": "#CCCCCC", "flex": 3},
+                {"type": "text", "text": profit_text, "size": "xxs", "color": profit_color, "flex": 2, "align": "end", "weight": "bold"},
+            ],
+        })
+
+    # Total row
+    total_color = "#27AE60" if total_profit > 0 else "#E74C3C" if total_profit < 0 else "#888888"
+    rows.append({"type": "separator", "margin": "sm"})
+    rows.append({
+        "type": "box", "layout": "horizontal", "margin": "sm",
+        "contents": [
+            {"type": "text", "text": "合計", "size": "xs", "color": "#FFFFFF", "flex": 8, "weight": "bold"},
+            {"type": "text", "text": f"{'+' if total_profit > 0 else ''}{total_profit:,}",
+             "size": "xs", "color": total_color, "flex": 2, "align": "end", "weight": "bold"},
+        ],
+    })
+
+    return {
+        "type": "flex",
+        "altText": "已結算注單",
+        "contents": {
+            "type": "bubble",
+            "size": "mega",
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "backgroundColor": "#1B2838",
+                "paddingAll": "12px",
+                "contents": [
+                    {"type": "text", "text": f"已結算注單 ({len(bets)}張)", "color": "#F39C12", "weight": "bold", "size": "md"},
+                    {"type": "separator", "margin": "md", "color": "#333333"},
+                    *rows,
+                ],
+            },
+        },
+    }
+
+
 def build_success_message(text: str) -> dict:
     """Simple success text message."""
     return {"type": "text", "text": f"✅ {text}"}

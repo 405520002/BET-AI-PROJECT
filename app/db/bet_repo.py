@@ -63,6 +63,43 @@ def get_user_bets_by_date(user_id: str, date_str: str) -> list[dict]:
     return results
 
 
+def get_user_bets_by_status(user_id: str, status: str) -> list[dict]:
+    db = get_db()
+    cursor = (
+        db[COLLECTION]
+        .find({"user_id": user_id, "status": status})
+        .sort("created_at", -1)
+    )
+    results = []
+    for doc in cursor:
+        doc["id"] = str(doc["_id"])
+        results.append(doc)
+    return results
+
+
+def get_user_settled_bets(user_id: str, limit: int = 30) -> list[dict]:
+    db = get_db()
+    cursor = (
+        db[COLLECTION]
+        .find({"user_id": user_id, "status": {"$in": ["won", "lost", "refunded"]}})
+        .sort("created_at", -1)
+        .limit(limit)
+    )
+    results = []
+    for doc in cursor:
+        doc["id"] = str(doc["_id"])
+        results.append(doc)
+    return results
+
+
+def count_user_settled_bets(user_id: str) -> int:
+    db = get_db()
+    return db[COLLECTION].count_documents({
+        "user_id": user_id,
+        "status": {"$in": ["won", "lost", "refunded"]},
+    })
+
+
 def update_bet(bet_id: str, data: dict):
     db = get_db()
     data["updated_at"] = datetime.now()
