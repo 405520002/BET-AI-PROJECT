@@ -480,6 +480,75 @@ def _build_analysis_card(game: dict, bs: dict, summary: str = "") -> dict | None
     }
 
 
+def _push_takamei_reminder():
+    """Push TAKAMEI mascot reminder + help cards to all users."""
+    from linebot.v3.messaging import (
+        ApiClient, Configuration, MessagingApi,
+        PushMessageRequest, FlexMessage, FlexContainer, TextMessage,
+    )
+    from openai import OpenAI
+    from app.config import settings
+    from app.line_bot.flex_messages import build_help
+
+    db = get_db()
+    users = list(db["users"].find({}, {"_id": 1, "display_name": 1}))
+    if not users:
+        return
+
+    client = OpenAI(api_key=settings.openrouter_api_key, base_url="https://openrouter.ai/api/v1")
+    configuration = Configuration(access_token=settings.line_channel_access_token)
+    sent = 0
+
+    with ApiClient(configuration) as api_client:
+        api = MessagingApi(api_client)
+        for user in users:
+            name = user.get("display_name", "") or "朋友"
+
+            # Generate personalized mascot message
+            try:
+                r = client.chat.completions.create(
+                    model="arcee-ai/trinity-large-preview:free",
+                    messages=[{"role": "user", "content": f"""你是TAKAMEI，中華職棒虛擬下注平台的可愛吉祥物。
+請用可愛、活潑、有趣的語調寫一段提醒訊息給「{name}」。
+
+要求：
+- 繁體中文，3-4句話，100字以內
+- 語調像可愛的動物吉祥物（用「~」「！」「喔」「呢」等語氣詞）
+- 提醒今天有比賽可以下注
+- 鼓勵他來玩，但不要太強迫
+- 可以加一點棒球梗或可愛的表情描述
+- 開頭要叫他的名字
+- 不要用 emoji
+
+直接寫訊息，不要加標題。"""}],
+                    temperature=0.9,
+                    max_tokens=200,
+                )
+                mascot_msg = r.choices[0].message.content.strip()
+            except Exception:
+                mascot_msg = f"{name}~今天也有精彩的中職比賽喔！快來看看今日賽事，說不定會有意想不到的好盤口呢！TAKAMEI在這裡等你來挑戰~"
+
+            # Build help cards
+            help_msg = build_help()
+
+            try:
+                api.push_message(PushMessageRequest(
+                    to=user["_id"],
+                    messages=[
+                        TextMessage(text=f"🐾 TAKAMEI提醒 {name}:\n\n{mascot_msg}"),
+                        FlexMessage(
+                            alt_text="功能說明",
+                            contents=FlexContainer.from_dict(help_msg["contents"]),
+                        ),
+                    ],
+                ))
+                sent += 1
+            except Exception as e:
+                logger.warning(f"TAKAMEI reminder push failed: {e}")
+
+    logger.info(f"[12:00] TAKAMEI reminder pushed to {sent}/{len(users)} users")
+
+
 async def midday_update():
     """12:00 - Re-scrape schedule to update game info (pitchers/venue/time), keep existing odds."""
     today = date.today().isoformat()
@@ -506,6 +575,9 @@ async def midday_update():
             game_repo.upsert_game(gid, game)
             logger.info(f"[12:00] New game added: {gid}")
         updated += 1
+
+    # Push TAKAMEI reminder
+    _push_takamei_reminder()
 
     return {"updated": updated}
 
