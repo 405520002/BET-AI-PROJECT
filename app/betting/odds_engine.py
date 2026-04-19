@@ -86,11 +86,15 @@ def _generate_two_step(games: list[dict], standings: dict) -> dict[str, dict]:
 
     for game in games:
         gid = game.get("id", "")
-        game_odds = _convert_single_game_json(openrouter, design_text, gid)
-        if game_odds:
-            result[gid] = game_odds
-        else:
-            logger.warning(f"Step 2 failed for {gid}, using fallback")
+        try:
+            game_odds = _convert_single_game_json(openrouter, design_text, gid)
+            if game_odds:
+                result[gid] = game_odds
+            else:
+                logger.warning(f"Step 2 failed for {gid}, using fallback")
+                result[gid] = generate_fallback_odds(game, standings)
+        except Exception as e:
+            logger.warning(f"Step 2 crashed for {gid}: {e}, using fallback")
             result[gid] = generate_fallback_odds(game, standings)
 
     logger.info(f"Step 2 done: {sum(1 for v in result.values() if len(v.get('markets',[])) > 3)} games with AI odds")
