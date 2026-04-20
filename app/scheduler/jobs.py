@@ -213,17 +213,14 @@ def _push_post_game_analysis(date_str: str, boxscores: dict, games: list[dict]):
 
     db = get_db()
 
-    # Find users who bet today and which games they bet on
-    user_games = {}  # {user_id: [game_id, ...]}
+    # Group bets by user
+    user_bets: dict[str, list[dict]] = {}
     all_bets = list(db["bets"].find({"game_date": date_str}))
     for bet in all_bets:
         uid = bet.get("user_id", "")
-        gid = bet.get("game_id", "")
-        if uid not in user_games:
-            user_games[uid] = set()
-        user_games[uid].add(gid)
+        user_bets.setdefault(uid, []).append(bet)
 
-    if not user_games:
+    if not user_bets:
         logger.info("[00:00] No users bet today, skipping analysis")
         return
 
@@ -241,39 +238,41 @@ def _push_post_game_analysis(date_str: str, boxscores: dict, games: list[dict]):
         if card:
             game_cards[gid] = card
 
-    if not game_cards:
-        return
-
-    # Push to each user their relevant cards
+    # Push to each user: analysis carousel + daily settlement card
     configuration = Configuration(access_token=settings.line_channel_access_token)
     sent = 0
 
     with ApiClient(configuration) as api_client:
         api = MessagingApi(api_client)
-        for uid, game_ids in user_games.items():
+        for uid, bets in user_bets.items():
+            messages = []
+
+            game_ids = {b.get("game_id", "") for b in bets}
             cards = [game_cards[gid] for gid in game_ids if gid in game_cards]
-            if not cards:
+            if cards:
+                carousel = {"type": "carousel", "contents": cards[:10]}
+                messages.append(FlexMessage(
+                    alt_text="賽後分析",
+                    contents=FlexContainer.from_dict(carousel),
+                ))
+
+            settlement = _build_daily_settlement_card(date_str, bets)
+            if settlement:
+                messages.append(FlexMessage(
+                    alt_text="今日結算",
+                    contents=FlexContainer.from_dict(settlement),
+                ))
+
+            if not messages:
                 continue
 
-            # Build carousel
-            flex_data = {
-                "type": "carousel",
-                "contents": cards[:10],
-            }
-
             try:
-                api.push_message(PushMessageRequest(
-                    to=uid,
-                    messages=[FlexMessage(
-                        alt_text="賽後分析",
-                        contents=FlexContainer.from_dict(flex_data),
-                    )],
-                ))
+                api.push_message(PushMessageRequest(to=uid, messages=messages))
                 sent += 1
             except Exception as e:
                 logger.warning(f"Post-game push failed for {uid[:10]}...: {e}")
 
-    logger.info(f"[00:00] Pushed post-game analysis to {sent} users")
+    logger.info(f"[00:00] Pushed post-game analysis + settlement to {sent} users")
 
 
 def _generate_game_summaries(games: list[dict], boxscores: dict) -> dict[str, str]:
@@ -468,6 +467,125 @@ def _build_analysis_card(game: dict, bs: dict, summary: str = "") -> dict | None
             "paddingAll": "12px",
             "contents": [
                 {"type": "text", "text": f"📊 賽後分析  {game.get('date', '')}", "color": "#AAAAAA", "size": "xs"},
+            ],
+        },
+        "body": {
+            "type": "box",
+            "layout": "vertical",
+            "backgroundColor": "#1B2838",
+            "paddingAll": "15px",
+            "contents": contents,
+        },
+    }
+
+
+def _build_daily_settlement_card(date_str: str, bets: list[dict]) -> dict | None:
+    """Summary of a user's bets for the day: per-status count, totals, and per-bet detail."""
+    if not bets:
+        return None
+
+    status_icon = {"won": "✅", "lost": "❌", "refunded": "↩️", "pending": "⏳"}
+    status_color = {"won": "#27AE60", "lost": "#E74C3C", "refunded": "#AAAAAA", "pending": "#888888"}
+
+    total = len(bets)
+    won = sum(1 for b in bets if b.get("status") == "won")
+    lost = sum(1 for b in bets if b.get("status") == "lost")
+    refunded = sum(1 for b in bets if b.get("status") == "refunded")
+    pending = sum(1 for b in bets if b.get("status") == "pending")
+
+    total_wagered = sum(b.get("amount", 0) for b in bets)
+    total_payout = sum(b.get("payout", 0) for b in bets)
+    net = total_payout - total_wagered
+
+    net_color = "#27AE60" if net > 0 else ("#E74C3C" if net < 0 else "#AAAAAA")
+    net_text = f"+{net:,}" if net > 0 else f"{net:,}"
+
+    summary_parts = [f"✅{won}", f"❌{lost}"]
+    if refunded:
+        summary_parts.append(f"↩️{refunded}")
+    if pending:
+        summary_parts.append(f"⏳{pending}")
+
+    contents = [
+        {
+            "type": "box", "layout": "horizontal",
+            "contents": [
+                {"type": "text", "text": f"共 {total} 注", "size": "sm", "color": "#CCCCCC", "flex": 2},
+                {"type": "text", "text": " ".join(summary_parts), "size": "sm", "color": "#FFFFFF", "align": "end", "flex": 3},
+            ],
+        },
+        {"type": "separator", "margin": "lg", "color": "#333333"},
+        {
+            "type": "box", "layout": "horizontal", "margin": "md",
+            "contents": [
+                {"type": "text", "text": "總投注", "size": "xs", "color": "#888888", "flex": 1},
+                {"type": "text", "text": f"{total_wagered:,}", "size": "sm", "color": "#CCCCCC", "align": "end", "flex": 2},
+            ],
+        },
+        {
+            "type": "box", "layout": "horizontal", "margin": "sm",
+            "contents": [
+                {"type": "text", "text": "總派彩", "size": "xs", "color": "#888888", "flex": 1},
+                {"type": "text", "text": f"{total_payout:,}", "size": "sm", "color": "#CCCCCC", "align": "end", "flex": 2},
+            ],
+        },
+        {
+            "type": "box", "layout": "horizontal", "margin": "sm",
+            "contents": [
+                {"type": "text", "text": "淨損益", "size": "xs", "color": "#888888", "flex": 1},
+                {"type": "text", "text": net_text, "size": "md", "color": net_color, "align": "end", "weight": "bold", "flex": 2},
+            ],
+        },
+        {"type": "separator", "margin": "lg", "color": "#333333"},
+        {"type": "text", "text": "注單明細", "size": "sm", "color": "#F39C12", "weight": "bold", "margin": "lg"},
+    ]
+
+    for bet in bets[:10]:
+        status = bet.get("status", "pending")
+        icon = status_icon.get(status, "•")
+        amount = bet.get("amount", 0)
+        payout = bet.get("payout", 0)
+        market = bet.get("market_name", "")
+        selection = bet.get("selection", "")
+        odds = bet.get("odds", 0)
+
+        if status == "won":
+            delta_text = f"+{payout - amount:,}"
+        elif status == "lost":
+            delta_text = f"-{amount:,}"
+        elif status == "refunded":
+            delta_text = "±0"
+        else:
+            delta_text = "待結算"
+
+        contents.append({
+            "type": "box", "layout": "horizontal", "margin": "md",
+            "contents": [
+                {"type": "text", "text": f"{icon} {selection}", "size": "xs", "color": "#CCCCCC", "flex": 4, "wrap": True},
+                {"type": "text", "text": delta_text, "size": "xs", "color": status_color.get(status, "#CCCCCC"), "align": "end", "weight": "bold", "flex": 2},
+            ],
+        })
+        contents.append({
+            "type": "text", "text": f"  {market} · {amount:,} @{odds}",
+            "size": "xxs", "color": "#666666",
+        })
+
+    if len(bets) > 10:
+        contents.append({
+            "type": "text", "text": f"...另有 {len(bets) - 10} 筆",
+            "size": "xxs", "color": "#666666", "margin": "md", "align": "center",
+        })
+
+    return {
+        "type": "bubble",
+        "size": "mega",
+        "header": {
+            "type": "box",
+            "layout": "vertical",
+            "backgroundColor": "#1B2838",
+            "paddingAll": "12px",
+            "contents": [
+                {"type": "text", "text": f"📋 今日結算  {date_str}", "color": "#AAAAAA", "size": "xs"},
             ],
         },
         "body": {
