@@ -126,8 +126,8 @@ def _pick_winners(agg: dict) -> dict:
     }
 
 
-def _generate_ai_comments(winners: dict, date_range: tuple[str, str]) -> dict[str, str]:
-    """Ask the LLM to write one short line per award (champion only)."""
+def _generate_intro_text(winners: dict, date_range: tuple[str, str], game_count: int) -> str:
+    """Ask the LLM to write an intro message announcing the weekly awards."""
     from openai import OpenAI
 
     def champ(key):
@@ -137,40 +137,49 @@ def _generate_ai_comments(winners: dict, date_range: tuple[str, str]) -> dict[st
     lines = []
     w = champ("avg_king")
     if w:
-        lines.append(f"- avg_king: {w['name']} ({w['team_name']}) — 打擊率 .{int(round(w['avg']*1000)):03d} ({w['hits']}/{w['at_bats']})，{w['hr']} HR {w['rbi']} RBI")
+        lines.append(f"- 打擊王：{w['name']} ({w['team_name']}) .{int(round(w['avg']*1000)):03d} ({w['hits']}/{w['at_bats']})")
     w = champ("era_king")
     if w:
-        lines.append(f"- era_king: {w['name']} ({w['team_name']}) — ERA {w['era']:.2f} ({w['ip']}局 {w['earned_runs']}ER {w['strikeouts']}K)")
+        lines.append(f"- 自責分率王：{w['name']} ({w['team_name']}) ERA {w['era']:.2f} ({w['ip']}局)")
     w = champ("steal_king")
     if w:
-        lines.append(f"- steal_king: {w['name']} ({w['team_name']}) — {w['stolen_bases']} 次盜壘成功")
+        lines.append(f"- 盜壘王：{w['name']} ({w['team_name']}) {w['stolen_bases']} 次")
     w = champ("walk_king")
     if w:
-        lines.append(f"- walk_king: {w['name']} ({w['team_name']}) — 選到 {w['walks']} 次保送")
+        lines.append(f"- 保送王：{w['name']} ({w['team_name']}) {w['walks']} 保送")
     w = champ("strikeout_victim_king")
     if w:
-        lines.append(f"- strikeout_victim_king: {w['name']} ({w['team_name']}) — 被三振 {w['strikeouts']} 次")
+        lines.append(f"- 被三振王：{w['name']} ({w['team_name']}) {w['strikeouts']} K")
     w = champ("pitcher_k_king")
     if w:
-        lines.append(f"- pitcher_k_king: {w['name']} ({w['team_name']}) — 三振對手 {w['strikeouts']} 次")
+        lines.append(f"- 三振王：{w['name']} ({w['team_name']}) {w['strikeouts']} K")
     w = champ("error_king")
     if w:
-        lines.append(f"- error_king: {w['name']} ({w['team_name']}) — {w['errors']} 失誤")
+        lines.append(f"- 失誤王：{w['name']} ({w['team_name']}) {w['errors']} 失誤")
 
     if not lines:
-        return {}
+        return ""
 
     start, end = date_range
-    prompt = f"""你是中華職棒球評「TAKAMEI」，請針對上週 ({start} ~ {end}) 的七個球員獎項各寫一句短評。
+    fallback = (
+        f"⚾ 本週榮譽榜出爐！\n"
+        f"上週 ({start} ~ {end}) 共 {game_count} 場比賽，七大獎項揭曉。\n"
+        f"下方卡片看完整前三名排名 👇\n"
+        f"這週 CPBL 繼續開打，祝大家戰績長紅！"
+    )
+
+    prompt = f"""你是中華職棒虛擬下注平台的吉祥物「TAKAMEI」，請寫一段推播文字當作本週榮譽榜的開場。
 
 要求：
-- 每則評論 25~40 字繁體中文，語氣專業、有畫面感
-- 點出關鍵數據或球員特色
-- strikeout_victim_king (被三振最多) 和 error_king (失誤最多) 是「苦主」，請用鼓勵／帶點幽默的語氣，不要嘲諷
-- 回傳嚴格的 JSON，形如：{{"avg_king": "...", "era_king": "...", "steal_king": "...", "walk_king": "...", "strikeout_victim_king": "...", "pitcher_k_king": "...", "error_king": "..."}}
-- 只回 JSON，不要有其它文字或 code block
+- 繁體中文，100~180 字，2~4 段
+- 第一段：宣布上週 ({start} ~ {end}) 榮譽榜出爐，共 {game_count} 場比賽
+- 第二段：簡短 summary（挑 2~3 個最有梗的得主簡單點評，不要逐一列 7 項）
+- 第三段：祝大家這週下注順利、好好玩
+- 語氣活潑、有棒球味、適度 emoji（不過度）
+- 不要用「**」加粗符號或 markdown，純文字即可
+- 只回文字內容，不要加標題或引號
 
-得獎資料：
+七大得主資料：
 {chr(10).join(lines)}"""
 
     try:
@@ -178,23 +187,20 @@ def _generate_ai_comments(winners: dict, date_range: tuple[str, str]) -> dict[st
         response = client.chat.completions.create(
             model="arcee-ai/trinity-large-preview:free",
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.7,
-            max_tokens=900,
+            temperature=0.8,
+            max_tokens=500,
         )
         text = (response.choices[0].message.content or "").strip()
-        # Strip code fences if any
+        # Strip code fences if the model wrapped the reply
         if text.startswith("```"):
-            text = text.strip("`")
-            if text.startswith("json"):
-                text = text[4:]
-            text = text.strip()
-        return json.loads(text)
+            text = text.strip("`").strip()
+        return text or fallback
     except Exception as e:
-        logger.warning(f"Weekly awards AI failed: {e}")
-        return {}
+        logger.warning(f"Weekly awards intro AI failed: {e}")
+        return fallback
 
 
-def _build_awards_card(winners: dict, comments: dict, date_range: tuple[str, str]) -> dict | None:
+def _build_awards_card(winners: dict, date_range: tuple[str, str]) -> dict | None:
     start, end = date_range
     sections = []
     MEDAL = {1: "🥇", 2: "🥈", 3: "🥉"}
@@ -213,9 +219,6 @@ def _build_awards_card(winners: dict, comments: dict, date_range: tuple[str, str
              "text": f"{MEDAL[1]} {champ['name']} · {champ['team_name']}",
              "size": "xs", "color": "#CCCCCC", "margin": "xs"},
         ]
-        comment = comments.get(key, "")
-        if comment:
-            block.append({"type": "text", "text": comment, "size": "xxs", "color": "#888888", "wrap": True, "margin": "sm"})
         for idx, e in enumerate(entries[1:], start=2):
             block.append({
                 "type": "text",
@@ -300,10 +303,11 @@ def push_weekly_awards(today: date | None = None, force: bool = False) -> dict:
         logger.info("[Weekly Awards] No qualifying winners, skipping")
         return {"status": "skipped", "reason": "no_winners", "week": [start, end]}
 
-    comments = _generate_ai_comments(winners, (start, end))
-    card = _build_awards_card(winners, comments, (start, end))
+    card = _build_awards_card(winners, (start, end))
     if not card:
         return {"status": "skipped", "reason": "empty_card", "week": [start, end]}
+
+    intro = _generate_intro_text(winners, (start, end), agg["game_count"])
 
     # Push to whitelisted users (fall back to all users if whitelist empty)
     recipients = [e["id"] for e in whitelist_repo.list_all()]
@@ -316,13 +320,14 @@ def push_weekly_awards(today: date | None = None, force: bool = False) -> dict:
         api = MessagingApi(api_client)
         for uid in recipients:
             try:
-                api.push_message(PushMessageRequest(
-                    to=uid,
-                    messages=[FlexMessage(
-                        alt_text="🏆 本週榮譽榜",
-                        contents=FlexContainer.from_dict(card),
-                    )],
+                msgs = []
+                if intro:
+                    msgs.append(TextMessage(text=intro))
+                msgs.append(FlexMessage(
+                    alt_text="🏆 本週榮譽榜",
+                    contents=FlexContainer.from_dict(card),
                 ))
+                api.push_message(PushMessageRequest(to=uid, messages=msgs))
                 sent += 1
             except Exception as e:
                 logger.warning(f"Weekly awards push failed for {uid[:10]}...: {e}")
