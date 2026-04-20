@@ -257,7 +257,7 @@ def _build_awards_card(winners: dict, comments: dict, date_range: tuple[str, str
     }
 
 
-def push_weekly_awards(today: date | None = None) -> dict:
+def push_weekly_awards(today: date | None = None, force: bool = False) -> dict:
     """Main entry: compute last week's awards and push to all whitelisted users."""
     from linebot.v3.messaging import (
         ApiClient, Configuration, MessagingApi,
@@ -266,10 +266,17 @@ def push_weekly_awards(today: date | None = None) -> dict:
     from app.db import whitelist_repo
 
     start, end = _last_week_range(today)
+    db = get_db()
+    push_key = f"weekly_awards_pushed_{end}"
+    if not force and db["cache"].find_one({"_id": push_key}):
+        logger.info(f"[Weekly Awards] Already pushed for week ending {end}, skipping")
+        return {"status": "skipped", "reason": "already_pushed", "week": [start, end]}
+
     logger.info(f"[Weekly Awards] Aggregating {start} ~ {end}")
 
     agg = _aggregate(start, end)
     logger.info(f"[Weekly Awards] {agg['game_count']} games, {len(agg['batters'])} batters, {len(agg['pitchers'])} pitchers")
+
 
     if agg["game_count"] == 0:
         logger.info("[Weekly Awards] No games last week, skipping")
@@ -286,7 +293,6 @@ def push_weekly_awards(today: date | None = None) -> dict:
         return {"status": "skipped", "reason": "empty_card", "week": [start, end]}
 
     # Push to whitelisted users (fall back to all users if whitelist empty)
-    db = get_db()
     recipients = [e["id"] for e in whitelist_repo.list_all()]
     if not recipients:
         recipients = [u["_id"] for u in db["users"].find({}, {"_id": 1})]
@@ -309,7 +315,6 @@ def push_weekly_awards(today: date | None = None) -> dict:
                 logger.warning(f"Weekly awards push failed for {uid[:10]}...: {e}")
 
     # Mark as pushed (idempotency key per week)
-    push_key = f"weekly_awards_pushed_{end}"
     db["cache"].update_one(
         {"_id": push_key},
         {"$set": {"pushed": True, "pushed_at": datetime.now(), "sent": sent}},

@@ -145,11 +145,11 @@ async def cron_notify(x_cron_secret: Optional[str] = Header(None)):
 
 
 @app.post("/cron/weekly-awards")
-async def cron_weekly_awards(x_cron_secret: Optional[str] = Header(None)):
-    """Monday morning - push last week's player leaders (HR / AVG / ERA / Errors)."""
+async def cron_weekly_awards(force: bool = False, x_cron_secret: Optional[str] = Header(None)):
+    """Monday - push last week's player leaders (HR / AVG / ERA / Errors). Use ?force=1 to override idempotency."""
     _verify_cron(x_cron_secret)
     from app.scheduler.weekly_awards import push_weekly_awards
-    result = push_weekly_awards()
+    result = push_weekly_awards(force=force)
     return result
 
 
