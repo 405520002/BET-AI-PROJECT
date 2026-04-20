@@ -778,6 +778,8 @@ async def midnight_settle():
             bs = await scrape_boxscore(game_sno)
             if bs:
                 boxscores[game["id"]] = bs
+                # Persist for weekly awards aggregation
+                game_repo.upsert_game(game["id"], {"boxscore": bs})
                 logger.info(f"[00:00] Boxscore {game['id']}: {bs.get('away_score',0)}-{bs.get('home_score',0)}, HR:{bs.get('total_hr',0)}, 1st:{bs.get('first_inning_runs',0)}")
         except Exception as e:
             logger.warning(f"[00:00] Boxscore failed for {game['id']}: {e}")

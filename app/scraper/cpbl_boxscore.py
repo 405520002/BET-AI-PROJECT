@@ -121,14 +121,20 @@ def _parse_boxscore(data: dict) -> dict:
         hr = int(b.get("HomeRunCnt", 0) or 0)
         total_hr += hr
         hits = int(b.get("HittingCnt", 0) or 0)
-        if hr > 0 or hits > 0:
+        at_bats = int(b.get("HitCnt", 0) or 0)
+        errors = int(b.get("ErrorCnt", 0) or 0)
+        # Keep every row that has any action so weekly aggregation can sum AB / errors
+        if hr > 0 or hits > 0 or at_bats > 0 or errors > 0:
             vh = int(float(b.get("VisitingHomeType", 0) or 0))
             result["batting_summary"].append({
                 "name": b.get("HitterName", "") or "",
                 "team": "home" if vh == 2 else "away",
+                "team_name": (result["home_team_name"] if vh == 2 else result["away_team_name"]),
                 "hits": hits,
                 "hr": hr,
                 "rbi": int(b.get("RunBattedINCnt", 0) or b.get("RunBattedInCnt", 0) or 0),
+                "at_bats": at_bats,
+                "errors": errors,
             })
     result["total_hr"] = total_hr
 
@@ -142,7 +148,9 @@ def _parse_boxscore(data: dict) -> dict:
         result["pitchers"].append({
             "name": p.get("PitcherName", "") or "",
             "team": "home" if vh == 2 else "away",
+            "team_name": (result["home_team_name"] if vh == 2 else result["away_team_name"]),
             "ip": f"{ip_full}.{ip_frac}",
+            "ip_outs": ip_full * 3 + ip_frac,  # for weekly aggregation
             "strikeouts": int(p.get("StrikeOutCnt", 0) or 0),
             "earned_runs": int(p.get("EarnedRunCnt", 0) or 0),
             "hits_allowed": int(p.get("HittingCnt", 0) or 0),

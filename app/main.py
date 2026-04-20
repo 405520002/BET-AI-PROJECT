@@ -144,6 +144,15 @@ async def cron_notify(x_cron_secret: Optional[str] = Header(None)):
     return {"status": "ok", **result}
 
 
+@app.post("/cron/weekly-awards")
+async def cron_weekly_awards(x_cron_secret: Optional[str] = Header(None)):
+    """Monday morning - push last week's player leaders (HR / AVG / ERA / Errors)."""
+    _verify_cron(x_cron_secret)
+    from app.scheduler.weekly_awards import push_weekly_awards
+    result = push_weekly_awards()
+    return result
+
+
 # --- Health Check ---
 
 @app.get("/health")
