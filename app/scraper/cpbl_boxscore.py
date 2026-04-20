@@ -89,10 +89,11 @@ def _parse_boxscore(data: dict) -> dict:
             gd = gd_list[0] if isinstance(gd_list, list) else gd_list
 
     if gd:
+        from app.scraper.cpbl_schedule import _to_chinese_name
         result["home_score"] = gd.get("HomeTotalScore", 0) or 0
         result["away_score"] = gd.get("VisitingTotalScore", 0) or 0
-        result["home_team_name"] = gd.get("HomeTeamName") or ""
-        result["away_team_name"] = gd.get("VisitingTeamName") or ""
+        result["home_team_name"] = _to_chinese_name(gd.get("HomeTeamName") or "")
+        result["away_team_name"] = _to_chinese_name(gd.get("VisitingTeamName") or "")
         result["winning_margin"] = abs(result["home_score"] - result["away_score"])
 
     # Scoreboard (逐局比分)
