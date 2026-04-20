@@ -1,10 +1,13 @@
-"""Weekly awards: aggregate last week's leaderboards and push Monday morning.
+"""Weekly awards: aggregate last week's leaderboards and push Monday noon.
 
 Leaders computed (Mon-Sun of previous week):
-- HR king (most home runs)
-- Batting-average king (min 10 AB)
-- Lowest ERA pitcher (min 5.0 IP)
-- Error leader (most fielding errors)
+- 打擊王: highest batting average (min 10 AB)
+- 自責分率王: lowest ERA (min 5.0 IP)
+- 盜壘王: most stolen bases
+- 保送王: most walks received (batter)
+- 被三振王: most strikeouts (batter)
+- 三振王: most strikeouts thrown (pitcher)
+- 失誤王: most fielding errors
 
 AI (via OpenRouter) writes a short commentary per award.
 """
@@ -53,13 +56,17 @@ def _aggregate(start: str, end: str) -> dict:
                 continue
             agg = batters.setdefault(key, {
                 "name": key[0], "team_name": key[1],
-                "hits": 0, "hr": 0, "rbi": 0, "at_bats": 0, "errors": 0, "games": 0,
+                "hits": 0, "hr": 0, "rbi": 0, "at_bats": 0, "errors": 0,
+                "walks": 0, "strikeouts": 0, "stolen_bases": 0, "games": 0,
             })
             agg["hits"] += b.get("hits", 0)
             agg["hr"] += b.get("hr", 0)
             agg["rbi"] += b.get("rbi", 0)
             agg["at_bats"] += b.get("at_bats", 0)
             agg["errors"] += b.get("errors", 0)
+            agg["walks"] += b.get("walks", 0)
+            agg["strikeouts"] += b.get("strikeouts", 0)
+            agg["stolen_bases"] += b.get("stolen_bases", 0)
             agg["games"] += 1
 
         for p in bs.get("pitchers", []):
@@ -88,14 +95,7 @@ def _pick_winners(agg: dict) -> dict:
     batters = agg["batters"]
     pitchers = agg["pitchers"]
 
-    # HR king — most HR, tiebreak by fewer AB (efficiency)
-    hr_king = max(
-        (b for b in batters if b["hr"] > 0),
-        key=lambda b: (b["hr"], -b["at_bats"]),
-        default=None,
-    )
-
-    # AVG king — min AB threshold
+    # 打擊王 — min AB threshold
     eligible_avg = [b for b in batters if b["at_bats"] >= MIN_AB_FOR_AVG]
     avg_king = None
     if eligible_avg:
@@ -103,7 +103,7 @@ def _pick_winners(agg: dict) -> dict:
         avg_king = dict(avg_king)
         avg_king["avg"] = avg_king["hits"] / avg_king["at_bats"]
 
-    # Lowest ERA — min IP threshold
+    # 自責分率王 — min IP threshold
     eligible_era = [p for p in pitchers if p["ip_outs"] >= MIN_IP_OUTS_FOR_ERA]
     era_king = None
     if eligible_era:
@@ -112,7 +112,35 @@ def _pick_winners(agg: dict) -> dict:
         era_king["ip"] = f"{era_king['ip_outs'] // 3}.{era_king['ip_outs'] % 3}"
         era_king["era"] = (era_king["earned_runs"] * 27) / era_king["ip_outs"]
 
-    # Error leader — most errors (dubious honor)
+    # 盜壘王 — most stolen bases
+    steal_king = max(
+        (b for b in batters if b["stolen_bases"] > 0),
+        key=lambda b: b["stolen_bases"],
+        default=None,
+    )
+
+    # 保送王 — most walks received by a batter
+    walk_king = max(
+        (b for b in batters if b["walks"] > 0),
+        key=lambda b: b["walks"],
+        default=None,
+    )
+
+    # 被三振王 — batter with most strikeouts
+    strikeout_victim_king = max(
+        (b for b in batters if b["strikeouts"] > 0),
+        key=lambda b: b["strikeouts"],
+        default=None,
+    )
+
+    # 三振王 — pitcher with most Ks
+    pitcher_k_king = max(
+        (p for p in pitchers if p["strikeouts"] > 0),
+        key=lambda p: p["strikeouts"],
+        default=None,
+    )
+
+    # 失誤王 — most fielding errors
     error_king = max(
         (b for b in batters if b["errors"] > 0),
         key=lambda b: b["errors"],
@@ -120,9 +148,12 @@ def _pick_winners(agg: dict) -> dict:
     )
 
     return {
-        "hr_king": hr_king,
         "avg_king": avg_king,
         "era_king": era_king,
+        "steal_king": steal_king,
+        "walk_king": walk_king,
+        "strikeout_victim_king": strikeout_victim_king,
+        "pitcher_k_king": pitcher_k_king,
         "error_king": error_king,
     }
 
@@ -132,15 +163,24 @@ def _generate_ai_comments(winners: dict, date_range: tuple[str, str]) -> dict[st
     from openai import OpenAI
 
     lines = []
-    if winners.get("hr_king"):
-        w = winners["hr_king"]
-        lines.append(f"- hr_king: {w['name']} ({w['team_name']}) — {w['hr']} 轟，{w['hits']}安 {w['rbi']}打點")
     if winners.get("avg_king"):
         w = winners["avg_king"]
-        lines.append(f"- avg_king: {w['name']} ({w['team_name']}) — 打擊率 .{int(round(w['avg']*1000)):03d} ({w['hits']}/{w['at_bats']})")
+        lines.append(f"- avg_king: {w['name']} ({w['team_name']}) — 打擊率 .{int(round(w['avg']*1000)):03d} ({w['hits']}/{w['at_bats']})，{w['hr']} HR {w['rbi']} RBI")
     if winners.get("era_king"):
         w = winners["era_king"]
         lines.append(f"- era_king: {w['name']} ({w['team_name']}) — ERA {w['era']:.2f} ({w['ip']}局 {w['earned_runs']}ER {w['strikeouts']}K)")
+    if winners.get("steal_king"):
+        w = winners["steal_king"]
+        lines.append(f"- steal_king: {w['name']} ({w['team_name']}) — {w['stolen_bases']} 次盜壘成功")
+    if winners.get("walk_king"):
+        w = winners["walk_king"]
+        lines.append(f"- walk_king: {w['name']} ({w['team_name']}) — 選到 {w['walks']} 次保送")
+    if winners.get("strikeout_victim_king"):
+        w = winners["strikeout_victim_king"]
+        lines.append(f"- strikeout_victim_king: {w['name']} ({w['team_name']}) — 被三振 {w['strikeouts']} 次")
+    if winners.get("pitcher_k_king"):
+        w = winners["pitcher_k_king"]
+        lines.append(f"- pitcher_k_king: {w['name']} ({w['team_name']}) — 三振對手 {w['strikeouts']} 次")
     if winners.get("error_king"):
         w = winners["error_king"]
         lines.append(f"- error_king: {w['name']} ({w['team_name']}) — {w['errors']} 失誤")
@@ -149,13 +189,13 @@ def _generate_ai_comments(winners: dict, date_range: tuple[str, str]) -> dict[st
         return {}
 
     start, end = date_range
-    prompt = f"""你是中華職棒球評「TAKAMEI」，請針對上週 ({start} ~ {end}) 的四個球員獎項各寫一句短評。
+    prompt = f"""你是中華職棒球評「TAKAMEI」，請針對上週 ({start} ~ {end}) 的七個球員獎項各寫一句短評。
 
 要求：
 - 每則評論 25~40 字繁體中文，語氣專業、有畫面感
 - 點出關鍵數據或球員特色
-- error_king 是失誤最多的「苦主」，請用鼓勵／帶點幽默的語氣，不要嘲諷
-- 回傳嚴格的 JSON，形如：{{"hr_king": "...", "avg_king": "...", "era_king": "...", "error_king": "..."}}
+- strikeout_victim_king (被三振最多) 和 error_king (失誤最多) 是「苦主」，請用鼓勵／帶點幽默的語氣，不要嘲諷
+- 回傳嚴格的 JSON，形如：{{"avg_king": "...", "era_king": "...", "steal_king": "...", "walk_king": "...", "strikeout_victim_king": "...", "pitcher_k_king": "...", "error_king": "..."}}
 - 只回 JSON，不要有其它文字或 code block
 
 得獎資料：
@@ -167,7 +207,7 @@ def _generate_ai_comments(winners: dict, date_range: tuple[str, str]) -> dict[st
             model="arcee-ai/trinity-large-preview:free",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
-            max_tokens=500,
+            max_tokens=900,
         )
         text = (response.choices[0].message.content or "").strip()
         # Strip code fences if any
@@ -199,26 +239,48 @@ def _build_awards_card(winners: dict, comments: dict, date_range: tuple[str, str
         block.append({"type": "separator", "margin": "lg", "color": "#333333"})
         sections.extend(block)
 
-    w = winners.get("hr_king")
-    if w:
-        add_block("🏏", "全壘打王", "#F39C12",
-                  f"{w['name']} · {w['team_name']}",
-                  f"{w['hr']} 轟",
-                  comments.get("hr_king", ""))
-
+    # Order follows user's requested list
     w = winners.get("avg_king")
     if w:
-        add_block("📈", "打擊率王", "#27AE60",
+        add_block("📈", "打擊王", "#27AE60",
                   f"{w['name']} · {w['team_name']}",
                   f".{int(round(w['avg']*1000)):03d} ({w['hits']}/{w['at_bats']})",
                   comments.get("avg_king", ""))
 
     w = winners.get("era_king")
     if w:
-        add_block("🥎", "最低自責分", "#3498DB",
+        add_block("🥎", "自責分率王", "#3498DB",
                   f"{w['name']} · {w['team_name']}",
                   f"ERA {w['era']:.2f}",
                   comments.get("era_king", ""))
+
+    w = winners.get("steal_king")
+    if w:
+        add_block("💨", "盜壘王", "#1ABC9C",
+                  f"{w['name']} · {w['team_name']}",
+                  f"{w['stolen_bases']} 次盜壘",
+                  comments.get("steal_king", ""))
+
+    w = winners.get("walk_king")
+    if w:
+        add_block("🎫", "保送王", "#E67E22",
+                  f"{w['name']} · {w['team_name']}",
+                  f"{w['walks']} 保送",
+                  comments.get("walk_king", ""))
+
+    w = winners.get("strikeout_victim_king")
+    if w:
+        add_block("💀", "被三振王", "#95A5A6",
+                  f"{w['name']} · {w['team_name']}",
+                  f"{w['strikeouts']} K",
+                  comments.get("strikeout_victim_king", ""))
+
+    w = winners.get("pitcher_k_king")
+    if w:
+        add_block("⚾", "三振王", "#F39C12",
+                  f"{w['name']} · {w['team_name']}",
+                  f"{w['strikeouts']} K",
+                  comments.get("pitcher_k_king", ""))
 
     w = winners.get("error_king")
     if w:
@@ -236,7 +298,7 @@ def _build_awards_card(winners: dict, comments: dict, date_range: tuple[str, str
 
     return {
         "type": "bubble",
-        "size": "mega",
+        "size": "giga",
         "header": {
             "type": "box",
             "layout": "vertical",
@@ -276,7 +338,6 @@ def push_weekly_awards(today: date | None = None, force: bool = False) -> dict:
 
     agg = _aggregate(start, end)
     logger.info(f"[Weekly Awards] {agg['game_count']} games, {len(agg['batters'])} batters, {len(agg['pitchers'])} pitchers")
-
 
     if agg["game_count"] == 0:
         logger.info("[Weekly Awards] No games last week, skipping")

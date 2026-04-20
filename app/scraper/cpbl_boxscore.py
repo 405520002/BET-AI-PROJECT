@@ -123,8 +123,11 @@ def _parse_boxscore(data: dict) -> dict:
         hits = int(b.get("HittingCnt", 0) or 0)
         at_bats = int(b.get("HitCnt", 0) or 0)
         errors = int(b.get("ErrorCnt", 0) or 0)
-        # Keep every row that has any action so weekly aggregation can sum AB / errors
-        if hr > 0 or hits > 0 or at_bats > 0 or errors > 0:
+        walks_b = int(b.get("BasesONBallsCnt", 0) or 0)
+        so_b = int(b.get("StrikeOutCnt", 0) or 0)
+        steals = int(b.get("StealBaseOKCnt", 0) or 0)
+        # Keep every row that has any action so weekly aggregation can sum
+        if hr > 0 or hits > 0 or at_bats > 0 or errors > 0 or walks_b > 0 or so_b > 0 or steals > 0:
             vh = int(float(b.get("VisitingHomeType", 0) or 0))
             result["batting_summary"].append({
                 "name": b.get("HitterName", "") or "",
@@ -135,6 +138,9 @@ def _parse_boxscore(data: dict) -> dict:
                 "rbi": int(b.get("RunBattedINCnt", 0) or b.get("RunBattedInCnt", 0) or 0),
                 "at_bats": at_bats,
                 "errors": errors,
+                "walks": walks_b,
+                "strikeouts": so_b,
+                "stolen_bases": steals,
             })
     result["total_hr"] = total_hr
 
