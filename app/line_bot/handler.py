@@ -21,7 +21,7 @@ from linebot.v3.webhooks import (
 )
 
 from app.config import settings
-from app.db import user_repo, game_repo, bet_repo
+from app.db import user_repo, game_repo, bet_repo, whitelist_repo
 from app.betting import bet_service
 from app.line_bot.commands import parse_text_command, parse_postback
 from app.line_bot import flex_messages
@@ -36,6 +36,11 @@ configuration = Configuration(access_token=settings.line_channel_access_token)
 
 def _get_api() -> MessagingApi:
     return MessagingApi(ApiClient(configuration))
+
+
+def _is_allowed(user_id: str) -> bool:
+    """Whitelist gate. Empty whitelist collection = allow everyone."""
+    return whitelist_repo.is_whitelisted(user_id)
 
 
 def _reply(reply_token: str, messages: list):
@@ -90,6 +95,16 @@ def _clear_state(user_id: str):
 def handle_follow(event: FollowEvent):
     """User adds the bot as friend."""
     user_id = event.source.user_id
+    # Log userId so the operator can add it to the whitelist if desired
+    logger.info(f"FollowEvent userId={user_id}")
+
+    if not _is_allowed(user_id):
+        _reply(event.reply_token, [
+            "感謝加入，但此服務目前僅限受邀使用者 🔒\n"
+            "如需使用，請聯繫管理員開通。"
+        ])
+        return
+
     api = _get_api()
     try:
         profile = api.get_profile(user_id)
@@ -127,6 +142,10 @@ def handle_text_message(event: MessageEvent):
     """Handle text messages."""
     user_id = event.source.user_id
     text = event.message.text.strip()
+
+    if not _is_allowed(user_id):
+        _reply(event.reply_token, ["此服務目前僅限受邀使用者 🔒"])
+        return
 
     # Ensure user exists
     api = _get_api()
@@ -184,6 +203,11 @@ def handle_text_message(event: MessageEvent):
 def handle_postback(event: PostbackEvent):
     """Handle postback events from buttons."""
     user_id = event.source.user_id
+
+    if not _is_allowed(user_id):
+        _reply(event.reply_token, ["此服務目前僅限受邀使用者 🔒"])
+        return
+
     data = parse_postback(event.postback.data)
 
     # Ensure user exists
