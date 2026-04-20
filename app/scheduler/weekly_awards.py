@@ -92,97 +92,69 @@ def _aggregate(start: str, end: str) -> dict:
 
 
 def _pick_winners(agg: dict) -> dict:
+    """Return top-3 per category. Each value is a list of dicts (champion first)."""
     batters = agg["batters"]
     pitchers = agg["pitchers"]
 
     # 打擊王 — min AB threshold
     eligible_avg = [b for b in batters if b["at_bats"] >= MIN_AB_FOR_AVG]
-    avg_king = None
-    if eligible_avg:
-        avg_king = max(eligible_avg, key=lambda b: b["hits"] / b["at_bats"])
-        avg_king = dict(avg_king)
-        avg_king["avg"] = avg_king["hits"] / avg_king["at_bats"]
+    avg_top = sorted(eligible_avg, key=lambda b: b["hits"] / b["at_bats"], reverse=True)[:3]
+    avg_top = [dict(b, avg=b["hits"] / b["at_bats"]) for b in avg_top]
 
-    # 自責分率王 — min IP threshold
+    # 自責分率王 — min IP threshold (ascending: lowest ERA wins)
     eligible_era = [p for p in pitchers if p["ip_outs"] >= MIN_IP_OUTS_FOR_ERA]
-    era_king = None
-    if eligible_era:
-        era_king = min(eligible_era, key=lambda p: (p["earned_runs"] * 27) / p["ip_outs"])
-        era_king = dict(era_king)
-        era_king["ip"] = f"{era_king['ip_outs'] // 3}.{era_king['ip_outs'] % 3}"
-        era_king["era"] = (era_king["earned_runs"] * 27) / era_king["ip_outs"]
+    era_top = sorted(eligible_era, key=lambda p: (p["earned_runs"] * 27) / p["ip_outs"])[:3]
+    era_top = [
+        dict(p, ip=f"{p['ip_outs'] // 3}.{p['ip_outs'] % 3}", era=(p["earned_runs"] * 27) / p["ip_outs"])
+        for p in era_top
+    ]
 
-    # 盜壘王 — most stolen bases
-    steal_king = max(
-        (b for b in batters if b["stolen_bases"] > 0),
-        key=lambda b: b["stolen_bases"],
-        default=None,
-    )
-
-    # 保送王 — most walks received by a batter
-    walk_king = max(
-        (b for b in batters if b["walks"] > 0),
-        key=lambda b: b["walks"],
-        default=None,
-    )
-
-    # 被三振王 — batter with most strikeouts
-    strikeout_victim_king = max(
-        (b for b in batters if b["strikeouts"] > 0),
-        key=lambda b: b["strikeouts"],
-        default=None,
-    )
-
-    # 三振王 — pitcher with most Ks
-    pitcher_k_king = max(
-        (p for p in pitchers if p["strikeouts"] > 0),
-        key=lambda p: p["strikeouts"],
-        default=None,
-    )
-
-    # 失誤王 — most fielding errors
-    error_king = max(
-        (b for b in batters if b["errors"] > 0),
-        key=lambda b: b["errors"],
-        default=None,
-    )
+    steal_top = sorted([b for b in batters if b["stolen_bases"] > 0], key=lambda b: b["stolen_bases"], reverse=True)[:3]
+    walk_top = sorted([b for b in batters if b["walks"] > 0], key=lambda b: b["walks"], reverse=True)[:3]
+    sok_top = sorted([b for b in batters if b["strikeouts"] > 0], key=lambda b: b["strikeouts"], reverse=True)[:3]
+    pk_top = sorted([p for p in pitchers if p["strikeouts"] > 0], key=lambda p: p["strikeouts"], reverse=True)[:3]
+    error_top = sorted([b for b in batters if b["errors"] > 0], key=lambda b: b["errors"], reverse=True)[:3]
 
     return {
-        "avg_king": avg_king,
-        "era_king": era_king,
-        "steal_king": steal_king,
-        "walk_king": walk_king,
-        "strikeout_victim_king": strikeout_victim_king,
-        "pitcher_k_king": pitcher_k_king,
-        "error_king": error_king,
+        "avg_king": avg_top,
+        "era_king": era_top,
+        "steal_king": steal_top,
+        "walk_king": walk_top,
+        "strikeout_victim_king": sok_top,
+        "pitcher_k_king": pk_top,
+        "error_king": error_top,
     }
 
 
 def _generate_ai_comments(winners: dict, date_range: tuple[str, str]) -> dict[str, str]:
-    """Ask the LLM to write one short line per award. Returns {key: text}."""
+    """Ask the LLM to write one short line per award (champion only)."""
     from openai import OpenAI
 
+    def champ(key):
+        lst = winners.get(key) or []
+        return lst[0] if lst else None
+
     lines = []
-    if winners.get("avg_king"):
-        w = winners["avg_king"]
+    w = champ("avg_king")
+    if w:
         lines.append(f"- avg_king: {w['name']} ({w['team_name']}) — 打擊率 .{int(round(w['avg']*1000)):03d} ({w['hits']}/{w['at_bats']})，{w['hr']} HR {w['rbi']} RBI")
-    if winners.get("era_king"):
-        w = winners["era_king"]
+    w = champ("era_king")
+    if w:
         lines.append(f"- era_king: {w['name']} ({w['team_name']}) — ERA {w['era']:.2f} ({w['ip']}局 {w['earned_runs']}ER {w['strikeouts']}K)")
-    if winners.get("steal_king"):
-        w = winners["steal_king"]
+    w = champ("steal_king")
+    if w:
         lines.append(f"- steal_king: {w['name']} ({w['team_name']}) — {w['stolen_bases']} 次盜壘成功")
-    if winners.get("walk_king"):
-        w = winners["walk_king"]
+    w = champ("walk_king")
+    if w:
         lines.append(f"- walk_king: {w['name']} ({w['team_name']}) — 選到 {w['walks']} 次保送")
-    if winners.get("strikeout_victim_king"):
-        w = winners["strikeout_victim_king"]
+    w = champ("strikeout_victim_king")
+    if w:
         lines.append(f"- strikeout_victim_king: {w['name']} ({w['team_name']}) — 被三振 {w['strikeouts']} 次")
-    if winners.get("pitcher_k_king"):
-        w = winners["pitcher_k_king"]
+    w = champ("pitcher_k_king")
+    if w:
         lines.append(f"- pitcher_k_king: {w['name']} ({w['team_name']}) — 三振對手 {w['strikeouts']} 次")
-    if winners.get("error_king"):
-        w = winners["error_king"]
+    w = champ("error_king")
+    if w:
         lines.append(f"- error_king: {w['name']} ({w['team_name']}) — {w['errors']} 失誤")
 
     if not lines:
@@ -225,69 +197,49 @@ def _generate_ai_comments(winners: dict, date_range: tuple[str, str]) -> dict[st
 def _build_awards_card(winners: dict, comments: dict, date_range: tuple[str, str]) -> dict | None:
     start, end = date_range
     sections = []
+    MEDAL = {1: "🥇", 2: "🥈", 3: "🥉"}
 
-    def add_block(emoji: str, title: str, title_color: str, headline: str, stats: str, comment: str):
+    def add_block(emoji: str, title: str, title_color: str, key: str, stat_fn):
+        entries = winners.get(key) or []
+        if not entries:
+            return
+        champ = entries[0]
         block = [
             {"type": "box", "layout": "horizontal", "contents": [
                 {"type": "text", "text": f"{emoji} {title}", "size": "sm", "color": title_color, "weight": "bold", "flex": 3},
-                {"type": "text", "text": stats, "size": "sm", "color": "#FFFFFF", "align": "end", "flex": 4, "weight": "bold"},
+                {"type": "text", "text": stat_fn(champ), "size": "sm", "color": "#FFFFFF", "align": "end", "flex": 4, "weight": "bold"},
             ]},
-            {"type": "text", "text": headline, "size": "xs", "color": "#CCCCCC", "margin": "xs"},
+            {"type": "text",
+             "text": f"{MEDAL[1]} {champ['name']} · {champ['team_name']}",
+             "size": "xs", "color": "#CCCCCC", "margin": "xs"},
         ]
+        comment = comments.get(key, "")
         if comment:
             block.append({"type": "text", "text": comment, "size": "xxs", "color": "#888888", "wrap": True, "margin": "sm"})
+        for idx, e in enumerate(entries[1:], start=2):
+            block.append({
+                "type": "text",
+                "text": f"{MEDAL[idx]} {e['name']} · {e['team_name']}  {stat_fn(e)}",
+                "size": "xxs", "color": "#777777", "margin": "xs", "wrap": True,
+            })
         block.append({"type": "separator", "margin": "lg", "color": "#333333"})
         sections.extend(block)
 
     # Order follows user's requested list
-    w = winners.get("avg_king")
-    if w:
-        add_block("📈", "打擊王", "#27AE60",
-                  f"{w['name']} · {w['team_name']}",
-                  f".{int(round(w['avg']*1000)):03d} ({w['hits']}/{w['at_bats']})",
-                  comments.get("avg_king", ""))
-
-    w = winners.get("era_king")
-    if w:
-        add_block("🥎", "自責分率王", "#3498DB",
-                  f"{w['name']} · {w['team_name']}",
-                  f"ERA {w['era']:.2f}",
-                  comments.get("era_king", ""))
-
-    w = winners.get("steal_king")
-    if w:
-        add_block("💨", "盜壘王", "#1ABC9C",
-                  f"{w['name']} · {w['team_name']}",
-                  f"{w['stolen_bases']} 次盜壘",
-                  comments.get("steal_king", ""))
-
-    w = winners.get("walk_king")
-    if w:
-        add_block("🎫", "保送王", "#E67E22",
-                  f"{w['name']} · {w['team_name']}",
-                  f"{w['walks']} 保送",
-                  comments.get("walk_king", ""))
-
-    w = winners.get("strikeout_victim_king")
-    if w:
-        add_block("💀", "被三振王", "#95A5A6",
-                  f"{w['name']} · {w['team_name']}",
-                  f"{w['strikeouts']} K",
-                  comments.get("strikeout_victim_king", ""))
-
-    w = winners.get("pitcher_k_king")
-    if w:
-        add_block("⚾", "三振王", "#F39C12",
-                  f"{w['name']} · {w['team_name']}",
-                  f"{w['strikeouts']} K",
-                  comments.get("pitcher_k_king", ""))
-
-    w = winners.get("error_king")
-    if w:
-        add_block("🧤", "失誤王", "#9B59B6",
-                  f"{w['name']} · {w['team_name']}",
-                  f"{w['errors']} 失誤",
-                  comments.get("error_king", ""))
+    add_block("📈", "打擊王", "#27AE60", "avg_king",
+              lambda e: f".{int(round(e['avg']*1000)):03d} ({e['hits']}/{e['at_bats']})")
+    add_block("🥎", "自責分率王", "#3498DB", "era_king",
+              lambda e: f"ERA {e['era']:.2f} ({e['ip']}局)")
+    add_block("💨", "盜壘王", "#1ABC9C", "steal_king",
+              lambda e: f"{e['stolen_bases']} 次盜壘")
+    add_block("🎫", "保送王", "#E67E22", "walk_king",
+              lambda e: f"{e['walks']} 保送")
+    add_block("💀", "被三振王", "#95A5A6", "strikeout_victim_king",
+              lambda e: f"{e['strikeouts']} K")
+    add_block("⚾", "三振王", "#F39C12", "pitcher_k_king",
+              lambda e: f"{e['strikeouts']} K")
+    add_block("🧤", "失誤王", "#9B59B6", "error_king",
+              lambda e: f"{e['errors']} 失誤")
 
     if not sections:
         return None
@@ -389,5 +341,5 @@ def push_weekly_awards(today: date | None = None, force: bool = False) -> dict:
         "games": agg["game_count"],
         "sent": sent,
         "recipients": len(recipients),
-        "winners": {k: (v["name"] if v else None) for k, v in winners.items()},
+        "winners": {k: (v[0]["name"] if v else None) for k, v in winners.items()},
     }
