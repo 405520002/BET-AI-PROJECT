@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 from app.scraper.http_client import fetch_api
 
-BASE_URL = "https://en.cpbl.com.tw"
+BASE_URL = "https://www.cpbl.com.tw"
 
 TEAM_CODE_MAP = {
     "ACN011": {"code": "ACN", "name": "中信兄弟"},
@@ -177,8 +177,8 @@ def _parse_games(game_list: list[dict], year: int, month: int, day: int | None =
             "game_time": game_time,
             "home_pitcher": g.get("HomePitcherName", "TBD"),
             "away_pitcher": g.get("VisitingPitcherName", "TBD"),
-            "home_logo": "https://en.cpbl.com.tw" + g.get("HomeClubSmallImgPath", "") if g.get("HomeClubSmallImgPath") else "",
-            "away_logo": "https://en.cpbl.com.tw" + g.get("VisitingClubSmallImgPath", "") if g.get("VisitingClubSmallImgPath") else "",
+            "home_logo": "https://www.cpbl.com.tw" + g.get("HomeClubSmallImgPath", "") if g.get("HomeClubSmallImgPath") else "",
+            "away_logo": "https://www.cpbl.com.tw" + g.get("VisitingClubSmallImgPath", "") if g.get("VisitingClubSmallImgPath") else "",
             "status": status,
         }
 

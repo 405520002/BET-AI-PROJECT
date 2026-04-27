@@ -50,20 +50,21 @@ def scrape_roster(base: str, club: str) -> dict[str, str]:
 
 
 def main() -> None:
+    # en.cpbl.com.tw is no longer reachable (HTTP 500); we keep the existing
+    # English→Chinese mapping in player_names.json untouched. This script now
+    # only refreshes the Chinese side and leaves stale English keys alone so
+    # apply_chinese_names() in cpbl_schedule still translates legacy English
+    # pitcher names found in older API responses or DB rows.
     mapping: dict[str, dict] = {}
     for club, club_name in CLUBS.items():
         print(f"-- {club} {club_name}")
         zh = scrape_roster("https://www.cpbl.com.tw", club)
         time.sleep(0.5)
-        en = scrape_roster("https://en.cpbl.com.tw", club)
-        time.sleep(0.5)
-        joined = 0
+        # Use Chinese name as both key and zh value so callers asking for a
+        # Chinese name still get the canonical record.
         for acnt, zh_name in zh.items():
-            en_name = en.get(acnt)
-            if en_name:
-                mapping[en_name] = {"zh": zh_name, "team": club_name, "acnt": acnt}
-                joined += 1
-        print(f"   ZH={len(zh)} EN={len(en)} joined={joined}")
+            mapping[zh_name] = {"zh": zh_name, "team": club_name, "acnt": acnt}
+        print(f"   ZH={len(zh)}")
 
     out = {
         "updated_at": time.strftime("%Y-%m-%d"),

@@ -9,7 +9,7 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-BASE_URL = "https://en.cpbl.com.tw"
+BASE_URL = "https://www.cpbl.com.tw"
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",

@@ -9,12 +9,12 @@ from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
-STANDINGS_URL = "https://en.cpbl.com.tw/standings/season"
+STANDINGS_URL = "https://www.cpbl.com.tw/standings/season"
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
     "Accept-Language": "zh-TW,zh;q=0.9",
-    "Referer": "https://en.cpbl.com.tw/",
+    "Referer": "https://www.cpbl.com.tw/",
 }
 
 TEAM_NAME_NORMALIZE = {
@@ -62,7 +62,7 @@ async def scrape_standings() -> dict:
     """Scrape current CPBL standings."""
     from app.scraper.http_client import fetch_page
     try:
-        html = await fetch_page("https://en.cpbl.com.tw", "/standings/season")
+        html = await fetch_page("https://www.cpbl.com.tw", "/standings/season")
         if not html:
             return _default_standings()
     except Exception as e:

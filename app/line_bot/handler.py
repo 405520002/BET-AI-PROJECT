@@ -347,8 +347,8 @@ def _get_standings_cached() -> dict:
             # Fallback: scrape synchronously
             import httpx
             from app.scraper.http_client import _browser_headers
-            r = httpx.get("https://en.cpbl.com.tw/standings/season",
-                         headers=_browser_headers("https://en.cpbl.com.tw/"),
+            r = httpx.get("https://www.cpbl.com.tw/standings/season",
+                         headers=_browser_headers("https://www.cpbl.com.tw/"),
                          follow_redirects=True, timeout=15)
             if r.status_code == 200:
                 standings = _parse_standings_html(r.text)
@@ -432,13 +432,13 @@ def _handle_live(event, user_id: str):
             return
 
         # Create session with anti-scraping
-        client = get_cpbl_session_sync("https://en.cpbl.com.tw")
+        client = get_cpbl_session_sync("https://www.cpbl.com.tw")
 
         try:
             # Get token from box page
-            headers = _browser_headers("https://en.cpbl.com.tw/")
+            headers = _browser_headers("https://www.cpbl.com.tw/")
             _time.sleep(_random.uniform(0.3, 0.8))
-            r = client.get("https://en.cpbl.com.tw/box", headers=headers)
+            r = client.get("https://www.cpbl.com.tw/box", headers=headers)
 
             token_match = re.search(r"RequestVerificationToken:\s*'([A-Za-z0-9_\-:]+)'", r.text)
             if not token_match:
@@ -452,10 +452,10 @@ def _handle_live(event, user_id: str):
                     continue
 
                 try:
-                    ajax_h = _ajax_headers("https://en.cpbl.com.tw/box", token)
+                    ajax_h = _ajax_headers("https://www.cpbl.com.tw/box", token)
                     _time.sleep(_random.uniform(0.3, 0.8))
                     r2 = client.post(
-                        "https://en.cpbl.com.tw/box/getlive",
+                        "https://www.cpbl.com.tw/box/getlive",
                         data={"gameSno": str(sno), "year": str(now.year), "kindCode": "A"},
                         headers=ajax_h,
                     )

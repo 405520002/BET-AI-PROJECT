@@ -28,7 +28,9 @@ def _browser_headers(referer: str = "") -> dict:
         "User-Agent": _random_ua(),
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
         "Accept-Language": "zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Accept-Encoding": "gzip, deflate, br",
+        # Drop "br" -- httpx only decodes brotli when the brotli library is installed,
+        # otherwise the body comes back as raw compressed bytes.
+        "Accept-Encoding": "gzip, deflate",
         "Connection": "keep-alive",
         "Upgrade-Insecure-Requests": "1",
         "Sec-Fetch-Dest": "document",
@@ -159,8 +161,11 @@ async def fetch_api(base_url: str, page_path: str, api_path: str, data: dict) ->
             logger.warning(f"Page {page_path}: {page_r.status_code}")
             return None
 
-        # Token is in: RequestVerificationToken: 'xxxxx'  (in JS headers)
+        # Token is in: RequestVerificationToken: 'xxxxx'  (JS headers)
+        # Fallback: <input name="__RequestVerificationToken" value="xxxxx" />
         match = re.search(r"RequestVerificationToken:\s*'([A-Za-z0-9_\-:]+)'", page_r.text)
+        if not match:
+            match = re.search(r'__RequestVerificationToken.*?value="([^"]+)"', page_r.text)
         token = match.group(1) if match else ""
 
         if not token:
