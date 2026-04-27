@@ -6,19 +6,10 @@ import logging
 import re
 from datetime import date
 
-from openai import OpenAI
-
-from app.config import settings
+from app.llm import gemini_generate
 from app.db import game_repo, bet_repo, user_repo, tx_repo
 
 logger = logging.getLogger(__name__)
-
-
-def _get_ai_client() -> OpenAI:
-    return OpenAI(
-        api_key=settings.openrouter_api_key,
-        base_url="https://openrouter.ai/api/v1",
-    )
 
 
 # ============================================================
@@ -508,20 +499,12 @@ def _ai_evaluate_bets(bets: list[dict], game: dict, boxscore: dict) -> list[tupl
 只回傳 JSON array，不要加其他文字。"""
 
     try:
-        client = _get_ai_client()
-        response = client.chat.completions.create(
-            model="nvidia/nemotron-3-super-120b-a12b:free",
-            messages=[{"role": "user", "content": prompt}],
+        text = gemini_generate(
+            prompt,
             temperature=0,
-            max_tokens=256,
-        )
-        text = response.choices[0].message.content.strip()
-
-        if "```" in text:
-            text = text.split("```")[1].split("```")[0].strip()
-            if text.startswith("json"):
-                text = text[4:].strip()
-
+            max_output_tokens=1024,
+            json_mode=True,
+        ).strip()
         ai_results = json.loads(text)
 
         results = []

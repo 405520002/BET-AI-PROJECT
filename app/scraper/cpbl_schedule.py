@@ -39,18 +39,28 @@ EN_TO_ZH = {
 }
 
 
+# FieldAbbe → 中文. 2026 球季實際用到的 11 個 code (從 schedule API 全年掃出) + 歷史遺留.
 VENUE_MAP = {
-    "CCL": "澄清湖棒球場",
-    "XZG": "新莊棒球場",
-    "TMU": "天母棒球場",
+    # 2026 主要使用 (按出現頻率)
+    "TPD": "台北大巨蛋",            # 富邦悍將主場 (638 場)
+    "TYN": "樂天桃園棒球場",        # 樂天桃猿主場 (572 場)
+    "XZG": "新莊棒球場",            # 富邦舊主場 (572 場)
+    "API": "台南亞太成棒主球場",    # 統一獅新主場 (528 場)
+    "INT": "洲際棒球場",            # 中信兄弟主場 (528 場)
+    "CCL": "澄清湖棒球場",          # 味全龍主場 (495 場)
+    "TMU": "天母棒球場",            # (451 場)
+    "CYC": "嘉義市立棒球場",        # (110 場)
+    "TTG": "TTG 球場 (待確認)",     # 台鋼副主場 (66 場) - 正式中文名待核對
+    "HLN": "花蓮縣棒球場",          # (22 場)
+    "DLU": "斗六棒球場",            # (22 場)
+    # 歷史遺留 code (保留以防舊資料)
     "LOT": "樂天桃園棒球場",
-    "TPD": "台北大巨蛋",
     "TCD": "洲際棒球場",
     "ICC": "洲際棒球場",
     "TYB": "台南棒球場",
     "HSC": "新竹棒球場",
     "DLG": "斗六棒球場",
-    "HLG": "花蓮棒球場",
+    "HLG": "花蓮縣棒球場",
 }
 
 
@@ -68,62 +78,17 @@ def _to_chinese_venue(venue: str) -> str:
     return VENUE_MAP.get(venue, venue)
 
 
-def translate_games_with_ai(games: list[dict]) -> list[dict]:
-    """Use AI to translate any remaining English text in games to Chinese."""
-    # Collect untranslated fields
-    needs_translate = []
+def apply_chinese_names(games: list[dict]) -> list[dict]:
+    """Replace pitcher English names with CPBL-registered Chinese names where available.
+    Fallback: keep original English when the player isn't in the mapping.
+    Source of truth: app/scraper/player_names.json
+    """
+    from app.scraper.player_names import to_chinese
     for g in games:
-        for field in ["home_team_name", "away_team_name", "venue", "home_pitcher", "away_pitcher"]:
+        for field in ("home_pitcher", "away_pitcher"):
             val = g.get(field, "")
-            if val and not any('\u4e00' <= c <= '\u9fff' for c in val) and val != "TBD" and val != "":
-                needs_translate.append(val)
-
-    if not needs_translate:
-        return games
-
-    unique_terms = list(set(needs_translate))
-
-    try:
-        from openai import OpenAI
-        from app.config import settings
-
-        client = OpenAI(
-            api_key=settings.openrouter_api_key,
-            base_url="https://openrouter.ai/api/v1",
-        )
-
-        prompt = f"""把以下中華職棒相關的英文翻譯成繁體中文，回傳 JSON object（key 是英文，value 是中文）。
-球員名字如果是外國人用常見的中文譯名，台灣球員直接用中文名。球場用正式中文名。
-
-{unique_terms}
-
-只回傳 JSON，不要其他文字。"""
-
-        response = client.chat.completions.create(
-            model="nvidia/nemotron-3-super-120b-a12b:free",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0,
-            max_tokens=1024,
-        )
-
-        text = response.choices[0].message.content.strip()
-        if "```" in text:
-            text = text.split("```json")[-1].split("```")[0].strip() if "```json" in text else text.split("```")[1].split("```")[0].strip()
-
-        import json
-        translations = json.loads(text)
-
-        # Apply translations
-        for g in games:
-            for field in ["home_team_name", "away_team_name", "venue", "home_pitcher", "away_pitcher"]:
-                val = g.get(field, "")
-                if val in translations:
-                    g[field] = translations[val]
-
-    except Exception as e:
-        import logging
-        logging.getLogger(__name__).warning(f"AI translation failed: {e}")
-
+            if val and val != "TBD":
+                g[field] = to_chinese(val)
     return games
 
 
@@ -149,7 +114,7 @@ async def scrape_schedule_for_date(year: int, month: int, day: int | None = None
 
         game_list = json.loads(data["GameDatas"])
         games = _parse_games(game_list, year, month, day)
-        games = translate_games_with_ai(games)
+        games = apply_chinese_names(games)
         return games
 
     except Exception as e:

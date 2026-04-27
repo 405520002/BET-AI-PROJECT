@@ -1,6 +1,8 @@
-"""Odds engine: two-step LLM approach.
-Step 1 (OpenRouter free models): creative market design
-Step 2 (Groq Llama 3.3): reliable JSON formatting
+"""Odds engine: two-step Gemini approach.
+Step 1: creative market design (temperature 0.7, free-form text)
+Step 2: per-game JSON formatting (temperature 0, responseMimeType=application/json)
+
+Both steps force thinkingBudget=0 to avoid hidden thinking-token cost.
 """
 from __future__ import annotations
 
@@ -8,32 +10,14 @@ import json
 import logging
 import time
 
-from openai import OpenAI
-
 from app.config import settings
-from app.betting.odds_prompt import build_design_prompt, build_json_prompt
+from app.llm import MODEL, gemini_generate
+from app.betting.odds_prompt import build_design_prompt, build_json_prompt_single
 from app.betting.odds_fallback import generate_fallback_odds
 
 logger = logging.getLogger(__name__)
 
 MAX_RETRIES = 3
-
-# Step 1: creative design (Trinity is best for creative Chinese output)
-DESIGN_MODELS = [
-    "arcee-ai/trinity-large-preview:free",
-    "nvidia/nemotron-3-super-120b-a12b:free",
-    "arcee-ai/trinity-large-preview:free",
-]
-
-# Step 2: JSON formatting (Nemotron is most accurate for JSON + correct team names)
-JSON_MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
-
-
-def _get_openrouter() -> OpenAI:
-    return OpenAI(
-        api_key=settings.openrouter_api_key,
-        base_url="https://openrouter.ai/api/v1",
-    )
 
 
 def generate_odds_for_games(games: list[dict], standings: dict) -> dict[str, dict]:
@@ -47,28 +31,20 @@ def generate_odds_for_games(games: list[dict], standings: dict) -> dict[str, dic
 
 
 def _generate_two_step(games: list[dict], standings: dict) -> dict[str, dict]:
-    """Step 1: AI designs markets in natural language. Step 2: AI converts to JSON."""
+    """Step 1: AI designs markets in natural language. Step 2: AI converts to JSON per game."""
 
-    # === Step 1: Design markets (OpenRouter free models) ===
+    # === Step 1: Design markets ===
     design_prompt = build_design_prompt(games, standings)
-    design_text = None
-    openrouter = _get_openrouter()
+    design_text = ""
 
     for attempt in range(MAX_RETRIES):
-        model = DESIGN_MODELS[attempt % len(DESIGN_MODELS)]
         try:
-            logger.info(f"Step 1 (design) attempt {attempt + 1}/{MAX_RETRIES} with {model}")
-            response = openrouter.chat.completions.create(
-                model=model,
-                messages=[{"role": "user", "content": design_prompt}],
+            logger.info(f"Step 1 (design) attempt {attempt + 1}/{MAX_RETRIES} with {MODEL}")
+            design_text = gemini_generate(
+                design_prompt,
                 temperature=0.7,
-                max_tokens=3000,
+                max_output_tokens=3000,
             )
-            design_text = response.choices[0].message.content or ""
-            if "<think>" in design_text:
-                idx = design_text.rfind("</think>")
-                if idx != -1:
-                    design_text = design_text[idx + 8:].strip()
             if len(design_text) > 100:
                 logger.info(f"Step 1 success: {len(design_text)} chars")
                 break
@@ -79,15 +55,12 @@ def _generate_two_step(games: list[dict], standings: dict) -> dict[str, dict]:
     if not design_text or len(design_text) < 100:
         raise RuntimeError("Step 1 (design) failed")
 
-    # === Step 2: Convert to JSON per game (one at a time for reliability) ===
-    from app.betting.odds_prompt import build_json_prompt_single
-    openrouter = _get_openrouter()
+    # === Step 2: Convert to JSON per game ===
     result = {}
-
     for game in games:
         gid = game.get("id", "")
         try:
-            game_odds = _convert_single_game_json(openrouter, design_text, gid)
+            game_odds = _convert_single_game_json(design_text, gid)
             if game_odds:
                 result[gid] = game_odds
             else:
@@ -101,31 +74,22 @@ def _generate_two_step(games: list[dict], standings: dict) -> dict[str, dict]:
     return result
 
 
-def _convert_single_game_json(openrouter, design_text: str, game_id: str) -> dict | None:
-    """Convert Step 1 design to JSON for a single game."""
-    from app.betting.odds_prompt import build_json_prompt_single
-
+def _convert_single_game_json(design_text: str, game_id: str) -> dict | None:
     prompt = build_json_prompt_single(design_text, game_id)
 
     for attempt in range(MAX_RETRIES):
-        response = None
+        json_text = ""
         try:
             logger.info(f"Step 2 (JSON) {game_id} attempt {attempt + 1}/{MAX_RETRIES}")
-            response = openrouter.chat.completions.create(
-                model=JSON_MODEL,
-                messages=[{"role": "user", "content": prompt}],
+            json_text = gemini_generate(
+                prompt,
                 temperature=0,
-                max_tokens=4096,
+                max_output_tokens=4096,
+                json_mode=True,
             )
-            json_text = response.choices[0].message.content or ""
-            if "<think>" in json_text:
-                idx = json_text.rfind("</think>")
-                if idx != -1:
-                    json_text = json_text[idx + 8:].strip()
 
             parsed = _parse_json_response(json_text)
 
-            # Handle both formats: single object or array
             if isinstance(parsed, list) and len(parsed) > 0:
                 game_data = parsed[0]
             elif isinstance(parsed, dict):
@@ -142,69 +106,47 @@ def _convert_single_game_json(openrouter, design_text: str, game_id: str) -> dic
             raise ValueError("No valid markets")
 
         except Exception as e:
-            raw_full = ""
-            finish = "none"
-            if response is not None:
-                choices = getattr(response, "choices", None) or []
-                if choices:
-                    msg = getattr(choices[0], "message", None)
-                    raw_full = (getattr(msg, "content", "") or "") if msg else ""
-                    finish = getattr(choices[0], "finish_reason", "none")
-                else:
-                    # OpenRouter sometimes returns choices: null (content filter, safety, etc.)
-                    finish = "no_choices"
             logger.warning(
-                f"Step 2 {game_id} attempt {attempt + 1} failed: {e} | "
-                f"finish_reason: {finish} | len: {len(raw_full)} | raw: {raw_full[:200]}"
+                f"Step 2 {game_id} attempt {attempt + 1} failed: {e} | len: {len(json_text)} | raw: {json_text[:200]}"
             )
             time.sleep(1)
 
     return None
 
 
-def _parse_json_response(text: str) -> list[dict]:
+def _parse_json_response(text: str):
     text = text.strip()
-    # Remove thinking tags
-    if "<think>" in text:
-        idx = text.rfind("</think>")
-        if idx != -1:
-            text = text[idx + 8:].strip()
-    # Remove markdown code blocks
+    # Remove markdown code fences (rare with responseMimeType but safety net)
     if "```json" in text:
         text = text.split("```json")[1].split("```")[0].strip()
     elif "```" in text:
         text = text.split("```")[1].split("```")[0].strip()
-    # Find JSON array
-    start = text.find("[")
-    end = text.rfind("]")
-    if start != -1 and end != -1:
-        text = text[start:end + 1]
 
-    # Try direct parse first
+    # Direct parse first (responseMimeType=application/json makes this reliable)
     try:
         return json.loads(text)
     except json.JSONDecodeError:
         pass
 
-    # Fix common JSON issues
-    import re
-    # Remove trailing commas before } or ]
-    text = re.sub(r',\s*([}\]])', r'\1', text)
-    # Fix unescaped newlines in strings
-    text = re.sub(r'(?<!\\)\n', ' ', text)
-    # Try again
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        pass
-
-    # Last resort: try to parse partial JSON (cut at last valid })
-    for i in range(len(text) - 1, 0, -1):
-        if text[i] == ']':
+    # Fallback: locate array/object bounds
+    for open_c, close_c in (("[", "]"), ("{", "}")):
+        start = text.find(open_c)
+        end = text.rfind(close_c)
+        if start != -1 and end > start:
+            candidate = text[start:end + 1]
             try:
-                return json.loads(text[:i + 1])
+                return json.loads(candidate)
             except json.JSONDecodeError:
                 continue
+
+    # Fix common issues (trailing commas, unescaped newlines in strings)
+    import re
+    fixed = re.sub(r',\s*([}\]])', r'\1', text)
+    fixed = re.sub(r'(?<!\\)\n', ' ', fixed)
+    try:
+        return json.loads(fixed)
+    except json.JSONDecodeError:
+        pass
 
     raise json.JSONDecodeError("Cannot parse JSON", text, 0)
 

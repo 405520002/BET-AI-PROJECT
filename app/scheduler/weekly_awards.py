@@ -9,7 +9,7 @@ Leaders computed (Mon-Sun of previous week):
 - 三振王: most strikeouts thrown (pitcher)
 - 失誤王: most fielding errors
 
-AI (via OpenRouter) writes a short commentary per award.
+AI (via Gemini) writes a short commentary per award.
 """
 from __future__ import annotations
 
@@ -128,7 +128,7 @@ def _pick_winners(agg: dict) -> dict:
 
 def _generate_intro_text(winners: dict, date_range: tuple[str, str], game_count: int) -> str:
     """Ask the LLM to write an intro message announcing the weekly awards."""
-    from openai import OpenAI
+    from app.llm import gemini_generate
 
     def champ(key):
         lst = winners.get(key) or []
@@ -183,15 +183,7 @@ def _generate_intro_text(winners: dict, date_range: tuple[str, str], game_count:
 {chr(10).join(lines)}"""
 
     try:
-        client = OpenAI(api_key=settings.openrouter_api_key, base_url="https://openrouter.ai/api/v1")
-        response = client.chat.completions.create(
-            model="arcee-ai/trinity-large-preview:free",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.8,
-            max_tokens=500,
-        )
-        text = (response.choices[0].message.content or "").strip()
-        # Strip code fences if the model wrapped the reply
+        text = gemini_generate(prompt, temperature=0.8, max_output_tokens=800).strip()
         if text.startswith("```"):
             text = text.strip("`").strip()
         return text or fallback

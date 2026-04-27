@@ -277,13 +277,11 @@ def _push_post_game_analysis(date_str: str, boxscores: dict, games: list[dict]):
 
 def _generate_game_summaries(games: list[dict], boxscores: dict) -> dict[str, str]:
     """Use AI to generate post-game summary per game. Returns {game_id: summary_text}."""
-    from openai import OpenAI
-    from app.config import settings
+    from app.llm import gemini_generate, GeminiError
     import time
     import random
 
     summaries = {}
-    client = OpenAI(api_key=settings.openrouter_api_key, base_url="https://openrouter.ai/api/v1")
 
     for game in games:
         gid = game.get("id", "")
@@ -334,17 +332,11 @@ def _generate_game_summaries(games: list[dict], boxscores: dict) -> dict[str, st
 {boxscore_text}"""
 
         try:
-            response = client.chat.completions.create(
-                model="arcee-ai/trinity-large-preview:free",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.7,
-                max_tokens=300,
-            )
-            text = (response.choices[0].message.content or "").strip()
+            text = gemini_generate(prompt, temperature=0.7, max_output_tokens=500).strip()
             if text and len(text) > 20:
                 summaries[gid] = text
                 logger.info(f"[00:00] TAKAMEI summary for {gid}: {len(text)} chars")
-            time.sleep(random.uniform(1, 2))
+            time.sleep(random.uniform(0.5, 1.0))
         except Exception as e:
             logger.warning(f"[00:00] TAKAMEI summary failed for {gid}: {e}")
 
@@ -604,8 +596,8 @@ def _push_takamei_reminder():
         ApiClient, Configuration, MessagingApi,
         PushMessageRequest, FlexMessage, FlexContainer, TextMessage,
     )
-    from openai import OpenAI
     from app.config import settings
+    from app.llm import gemini_generate
     from app.line_bot.flex_messages import build_help
 
     db = get_db()
@@ -613,15 +605,13 @@ def _push_takamei_reminder():
     if not users:
         return
 
-    client = OpenAI(api_key=settings.openrouter_api_key, base_url="https://openrouter.ai/api/v1")
     configuration = Configuration(access_token=settings.line_channel_access_token)
     sent = 0
 
     # Generate one template with AI (use {NAME} as placeholder)
     try:
-        r = client.chat.completions.create(
-            model="arcee-ai/trinity-large-preview:free",
-            messages=[{"role": "user", "content": """你是TAKAMEI，中華職棒虛擬下注平台的可愛吉祥物。
+        template = gemini_generate(
+            """你是TAKAMEI，中華職棒虛擬下注平台的可愛吉祥物。
 請用可愛、活潑、有趣的語調寫一段提醒訊息。
 
 要求：
@@ -633,11 +623,10 @@ def _push_takamei_reminder():
 - 開頭用 {NAME} 當作名字的佔位符（例如：{NAME}～今天...）
 - 可以適當使用 emoji 增加可愛感
 
-直接寫訊息，不要加標題。"""}],
+直接寫訊息，不要加標題。""",
             temperature=0.9,
-            max_tokens=200,
-        )
-        template = r.choices[0].message.content.strip()
+            max_output_tokens=400,
+        ).strip()
     except Exception:
         template = "{NAME}～今天也有精彩的中職比賽喔！⚾ 快來看看今日賽事，說不定會有意想不到的好盤口呢！TAKAMEI在這裡等你來挑戰～💪"
 

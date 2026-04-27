@@ -12,10 +12,13 @@ class Settings(BaseSettings):
     mongodb_uri: str = "mongodb://localhost:27017"
     mongodb_db: str = "cpbl_betting"
 
-    # OpenRouter (Step 1: creative design)
+    # Gemini (odds generation, both steps)
+    gemini_api_key: str = ""
+
+    # OpenRouter (legacy, kept for backward-compat with old .env)
     openrouter_api_key: str = ""
 
-    # Groq (Step 2: JSON formatting)
+    # Groq (legacy)
     groq_api_key: str = ""
 
     # App
