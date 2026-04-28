@@ -335,26 +335,20 @@ def _get_standings_cached() -> dict:
             and (now - _standings_cache["updated_at"]).seconds < 1800):
         return _standings_cache["data"]
 
-    from app.scraper.cpbl_standings import _parse_standings_html, _default_standings
+    from app.scraper.cpbl_standings import _default_standings
     from app.db.client import get_db
     try:
-        # Try DB cache first
+        # /standings/season is blocked from datacenter ASNs at HiNet's CDN edge,
+        # so the only path to fresh data is db.cache.standings, populated daily
+        # by the iPhone Shortcut residential relay (POST /ingest/standings).
+        # If the cache is empty (iPhone hasn't pushed yet today), fall through
+        # to the all-zero default so the UI still renders.
         db = get_db()
         cached = db["cache"].find_one({"_id": "standings"})
         if cached and cached.get("data"):
             standings = cached["data"]
         else:
-            # Fallback: scrape synchronously
-            import httpx
-            from app.scraper.http_client import _browser_headers
-            r = httpx.get("https://www.cpbl.com.tw/standings/season",
-                         headers=_browser_headers("https://www.cpbl.com.tw/"),
-                         follow_redirects=True, timeout=15)
-            if r.status_code == 200:
-                standings = _parse_standings_html(r.text)
-                db["cache"].update_one({"_id": "standings"}, {"$set": {"data": standings}}, upsert=True)
-            else:
-                standings = _default_standings()
+            standings = _default_standings()
     except Exception:
         standings = _default_standings()
 
@@ -435,10 +429,18 @@ def _handle_live(event, user_id: str):
         client = get_cpbl_session_sync("https://www.cpbl.com.tw")
 
         try:
-            # Get token from box page
+            # Get token from /box/index?gameSno=... — the bare /box path is
+            # blocked from datacenter ASNs (HiNet CDN) but /box/index with a
+            # gameSno query is whitelisted. Seed with any of today's snos.
+            seed_sno = next((g.get("game_sno") for g in today_games if g.get("game_sno")), None)
+            if not seed_sno:
+                _live_rate_limit[user_id] = now
+                _reply(event.reply_token, ["今日沒有賽事"])
+                return
+            box_index_url = f"https://www.cpbl.com.tw/box/index?gameSno={seed_sno}&year={now.year}&kindCode=A"
             headers = _browser_headers("https://www.cpbl.com.tw/")
             _time.sleep(_random.uniform(0.3, 0.8))
-            r = client.get("https://www.cpbl.com.tw/box", headers=headers)
+            r = client.get(box_index_url, headers=headers)
 
             token_match = re.search(r"RequestVerificationToken:\s*'([A-Za-z0-9_\-:]+)'", r.text)
             if not token_match:
@@ -452,7 +454,7 @@ def _handle_live(event, user_id: str):
                     continue
 
                 try:
-                    ajax_h = _ajax_headers("https://www.cpbl.com.tw/box", token)
+                    ajax_h = _ajax_headers(box_index_url, token)
                     _time.sleep(_random.uniform(0.3, 0.8))
                     r2 = client.post(
                         "https://www.cpbl.com.tw/box/getlive",
