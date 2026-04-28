@@ -99,7 +99,15 @@ async def scrape_today_schedule() -> list[dict]:
 
 
 async def scrape_schedule_for_date(year: int, month: int, day: int | None = None) -> list[dict]:
-    """Scrape CPBL schedule for a given year/month, optionally filter by day."""
+    """Scrape CPBL schedule for a given year/month, optionally filter by day.
+
+    Primary path: POST /schedule/getgamedatas (returns whole month).
+    Fallback (when HiNet blocks the datacenter ASN at the CDN edge): iterative
+    /box/getlive discovery — that endpoint returns the entire day's games for
+    any gameSno belonging to that day, and is NOT subject to the path-level
+    block. We use the latest known game_sno from db.games as a seed to find
+    the current week's range.
+    """
     try:
         data = await fetch_api(
             BASE_URL,
@@ -108,18 +116,156 @@ async def scrape_schedule_for_date(year: int, month: int, day: int | None = None
             {"kindCode": "A", "year": str(year), "month": str(month)},
         )
 
-        if not data or not data.get("Success"):
-            logger.error(f"CPBL API returned error: {data}")
+        if data and data.get("Success"):
+            game_list = json.loads(data["GameDatas"])
+            games = _parse_games(game_list, year, month, day)
+            return apply_chinese_names(games)
+
+        logger.error(f"CPBL schedule API returned error: {data}; trying /box/getlive fallback")
+    except Exception as e:
+        logger.error(f"CPBL schedule API failed: {e}; trying /box/getlive fallback")
+
+    return await _scrape_via_box_fallback(year, month, day)
+
+
+async def _scrape_via_box_fallback(year: int, month: int, day: int | None = None) -> list[dict]:
+    """Iteratively discover a month's games via /box/getlive when the schedule
+    API is blocked. /box/getlive returns ALL games for the day a queried
+    gameSno belongs to, so we walk gameSno forward day-by-day until we hit
+    a date past the target month."""
+    from app.scraper.http_client import get_cpbl_session, _ajax_headers, _browser_headers
+    from app.db.client import get_db
+
+    db = get_db()
+    target_prefix = f"{year}-{month:02d}-"
+
+    latest = db["games"].find_one(
+        {"date": {"$regex": f"^{year}-"}, "game_sno": {"$gt": 0}},
+        sort=[("game_sno", -1)],
+    )
+    if not latest:
+        logger.warning("[box-fallback] no seed game_sno in db.games; cannot fall back")
+        return []
+    seed_sno = max(1, (latest.get("game_sno") or 0) - 10)
+    logger.info(f"[box-fallback] seeding from sno={seed_sno} for {year}-{month:02d}")
+
+    games_out: list[dict] = []
+    seen_snos: set[int] = set()
+    sno = seed_sno
+    misses = 0
+    safety = 60
+
+    client, _ = await get_cpbl_session(BASE_URL)
+    try:
+        page_url = f"{BASE_URL}/box/index?gameSno={sno}&year={year}&kindCode=A"
+        page_r = await client.get(page_url, headers=_browser_headers(referer=BASE_URL + "/"))
+        m = re.search(r"RequestVerificationToken:\s*'([A-Za-z0-9_\-:]+)'", page_r.text)
+        if not m:
+            m = re.search(r'__RequestVerificationToken.*?value="([^"]+)"', page_r.text)
+        token = m.group(1) if m else ""
+        if not token:
+            logger.error("[box-fallback] could not obtain token from /box/index")
             return []
 
-        game_list = json.loads(data["GameDatas"])
-        games = _parse_games(game_list, year, month, day)
-        games = apply_chinese_names(games)
-        return games
+        ajax_h = _ajax_headers(page_url, token)
 
-    except Exception as e:
-        logger.error(f"Failed to scrape CPBL schedule: {e}")
-        return []
+        while safety > 0 and misses < 5:
+            safety -= 1
+            try:
+                api_r = await client.post(
+                    f"{BASE_URL}/box/getlive",
+                    data={"gameSno": str(sno), "year": str(year), "kindCode": "A"},
+                    headers=ajax_h,
+                )
+                d = api_r.json()
+            except Exception as e:
+                logger.warning(f"[box-fallback] /box/getlive sno={sno} failed: {e}")
+                misses += 1
+                sno += 1
+                continue
+
+            if not d.get("Success"):
+                misses += 1
+                sno += 1
+                continue
+
+            day_games = json.loads(d.get("GameDetailJson") or "[]")
+            if not day_games:
+                misses += 1
+                sno += 1
+                continue
+
+            anchor_date = (day_games[0].get("GameDateTimeS") or "")[:10]
+            if anchor_date and anchor_date > f"{year}-{month:02d}-31":
+                break
+
+            added = False
+            for g in day_games:
+                gs = g.get("GameSno")
+                if gs in seen_snos:
+                    continue
+                seen_snos.add(gs)
+                gd = (g.get("GameDateTimeS") or "")[:10]
+                if not gd.startswith(target_prefix):
+                    continue
+                games_out.append(_box_game_to_dict(g, gd))
+                added = True
+
+            max_sno = max((g.get("GameSno", sno) for g in day_games), default=sno)
+            misses = 0 if added else (misses + 1)
+            sno = max_sno + 1
+    finally:
+        await client.aclose()
+
+    if day is not None:
+        target_day = f"{year}-{month:02d}-{day:02d}"
+        games_out = [g for g in games_out if g["date"] == target_day]
+
+    logger.info(f"[box-fallback] returning {len(games_out)} games")
+    return apply_chinese_names(games_out)
+
+
+def _box_game_to_dict(g: dict, game_date: str) -> dict:
+    """Convert one /box/getlive GameDetailJson entry to our schedule shape."""
+    sno = g.get("GameSno", 0)
+    home_name = g.get("HomeTeamName", "")
+    away_name = g.get("VisitingTeamName", "")
+    home_code_raw = g.get("HomeTeamCode", "")
+    away_code_raw = g.get("VisitingTeamCode", "")
+    home_info = TEAM_CODE_MAP.get(home_code_raw, {"code": home_code_raw, "name": home_name})
+    away_info = TEAM_CODE_MAP.get(away_code_raw, {"code": away_code_raw, "name": away_name})
+
+    s_int = g.get("GameStatus")
+    chi = g.get("GameStatusChi", "")
+    if s_int == 3 or "比賽結束" in chi:
+        status = "final"
+    elif "延" in chi or "保留" in chi or "取消" in chi:
+        status = "postponed"
+    else:
+        status = "scheduled"
+
+    home_logo_path = g.get("HomeClubSmallImgPath") or ""
+    away_logo_path = g.get("VisitingClubSmallImgPath") or ""
+    out: dict = {
+        "id": f"{game_date.replace('-', '')}_{sno}",
+        "date": game_date,
+        "game_sno": sno,
+        "home_team": home_info["code"],
+        "home_team_name": _to_chinese_name(home_name),
+        "away_team": away_info["code"],
+        "away_team_name": _to_chinese_name(away_name),
+        "venue": _to_chinese_venue(g.get("FieldAbbe", "")),
+        "game_time": (g.get("GameDateTimeS") or "")[11:16] or "18:35",
+        "home_pitcher": g.get("HomePitcherName") or "",
+        "away_pitcher": g.get("VisitingPitcherName") or "",
+        "home_logo": (BASE_URL + home_logo_path) if home_logo_path else "",
+        "away_logo": (BASE_URL + away_logo_path) if away_logo_path else "",
+        "status": status,
+    }
+    if status == "final":
+        out["home_score"] = g.get("HomeTotalScore", 0) or 0
+        out["away_score"] = g.get("VisitingTotalScore", 0) or 0
+    return out
 
 
 def _parse_games(game_list: list[dict], year: int, month: int, day: int | None = None) -> list[dict]:
