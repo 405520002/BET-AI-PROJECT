@@ -113,32 +113,14 @@ async def scrape_today_schedule() -> list[dict]:
 
 
 async def scrape_schedule_for_date(year: int, month: int, day: int | None = None) -> list[dict]:
-    """Scrape CPBL schedule for a given year/month, optionally filter by day.
+    """Build a month's schedule via iterative /box/getlive discovery.
 
-    Primary path: POST /schedule/getgamedatas (returns whole month).
-    Fallback (when HiNet blocks the datacenter ASN at the CDN edge): iterative
-    /box/getlive discovery — that endpoint returns the entire day's games for
-    any gameSno belonging to that day, and is NOT subject to the path-level
-    block. We use the latest known game_sno from db.games as a seed to find
-    the current week's range.
+    /schedule/getgamedatas is permanently 404'd from non-TW datacenter ASNs
+    (HiNet CDN path-block), so we don't try it from the VM. To populate
+    announced starting pitchers (the fields /box/getlive doesn't carry),
+    POST raw schedule JSON to /ingest/schedule from a TW-residential relay;
+    the schedulers short-circuit to read from DB when a recent ingest exists.
     """
-    try:
-        data = await fetch_api(
-            BASE_URL,
-            "/schedule",
-            "/schedule/getgamedatas",
-            {"kindCode": "A", "year": str(year), "month": str(month)},
-        )
-
-        if data and data.get("Success"):
-            game_list = json.loads(data["GameDatas"])
-            games = _parse_games(game_list, year, month, day)
-            return apply_chinese_names(games)
-
-        logger.error(f"CPBL schedule API returned error: {data}; trying /box/getlive fallback")
-    except Exception as e:
-        logger.error(f"CPBL schedule API failed: {e}; trying /box/getlive fallback")
-
     return await _scrape_via_box_fallback(year, month, day)
 
 

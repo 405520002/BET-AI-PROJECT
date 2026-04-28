@@ -198,7 +198,7 @@ async def ingest_schedule(
     VisitingPitcherAcnt before HomePitcherName / VisitingPitcherName populate);
     /box/getlive — the only path reachable from non-TW datacenter ASNs — does not."""
     import json
-    from datetime import date
+    from datetime import datetime
 
     _verify_cron(x_cron_secret)
     raw = await request.body()
@@ -229,12 +229,20 @@ async def ingest_schedule(
     games = apply_chinese_names(_parse_games(game_list, year, month, day=None))
 
     from app.db import game_repo
+    from app.db.client import get_db
     for game in games:
         gid = game.get("id", "")
         existing = game_repo.get_game(gid)
         if existing and "odds" in existing:
             game["odds"] = existing["odds"]
         game_repo.upsert_game(gid, game)
+
+    # Marker the schedulers read to short-circuit their box-fallback scrape.
+    get_db()["cache"].update_one(
+        {"_id": "schedule_last_ingest"},
+        {"$set": {"updated_at": datetime.now(), "games_count": len(games)}},
+        upsert=True,
+    )
 
     logger.info(f"[ingest] Schedule upserted via residential relay: {len(games)} games")
     return {"status": "ok", "games": len(games)}

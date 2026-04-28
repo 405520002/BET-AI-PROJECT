@@ -16,7 +16,9 @@ Daily flow:
          2. Settle all bets
 """
 import logging
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+
+INGEST_FRESH_HOURS = 6
 
 from app.scraper import cpbl_schedule, cpbl_results, cpbl_standings
 from app.betting.odds_engine import generate_odds_for_games
@@ -25,6 +27,19 @@ from app.db import game_repo
 from app.db.client import get_db
 
 logger = logging.getLogger(__name__)
+
+
+def _recent_schedule_ingest_age_min() -> int | None:
+    """Minutes since the last /ingest/schedule write, or None if no fresh
+    ingest. The schedulers use this to skip the slow /box/getlive iteration
+    when residential-relay data already covers today."""
+    last = get_db()["cache"].find_one({"_id": "schedule_last_ingest"})
+    if not last or not last.get("updated_at"):
+        return None
+    age_s = (datetime.now() - last["updated_at"]).total_seconds()
+    if age_s > INGEST_FRESH_HOURS * 3600:
+        return None
+    return int(age_s / 60)
 
 
 async def morning_job():
@@ -66,14 +81,27 @@ async def morning_job():
     else:
         logger.warning("[08:00] scrape_standings returned default; keeping existing cache")
 
-    # Scrape this month's schedule (and next month if near end of month)
-    import time, random
-    all_games = []
-    all_games += await cpbl_schedule.scrape_schedule_for_date(today_obj.year, today_obj.month)
-    if today_obj.day >= 25:
-        time.sleep(random.uniform(1, 2))
-        next_month = today_obj.replace(day=28) + timedelta(days=4)
-        all_games += await cpbl_schedule.scrape_schedule_for_date(next_month.year, next_month.month)
+    # Source today + next 7 days from DB if a recent residential-relay
+    # /ingest/schedule covered them — those rows include announced starting
+    # pitchers, which the /box/getlive fallback can't carry. Otherwise iterate
+    # /box/getlive (slow) for a baseline of teams/venue/time only.
+    seven_days_later = (today_obj + timedelta(days=7)).isoformat()
+    ingest_age = _recent_schedule_ingest_age_min()
+    if ingest_age is not None:
+        logger.info(f"[08:00] schedule_last_ingest is {ingest_age}min old; reading from DB")
+        all_games = []
+        for doc in db["games"].find({"date": {"$gte": today_str, "$lte": seven_days_later}}):
+            doc["id"] = doc["_id"]
+            all_games.append(doc)
+    else:
+        import time, random
+        logger.info("[08:00] no recent schedule_last_ingest; falling back to /box/getlive")
+        all_games = []
+        all_games += await cpbl_schedule.scrape_schedule_for_date(today_obj.year, today_obj.month)
+        if today_obj.day >= 25:
+            time.sleep(random.uniform(1, 2))
+            next_month = today_obj.replace(day=28) + timedelta(days=4)
+            all_games += await cpbl_schedule.scrape_schedule_for_date(next_month.year, next_month.month)
 
     # Store finished games
     finished = [g for g in all_games if g.get("status") in ("final", "postponed")]
@@ -82,7 +110,6 @@ async def morning_job():
     logger.info(f"[08:00] Stored {len(finished)} finished games")
 
     # Cache upcoming 7-day schedule
-    seven_days_later = (today_obj + timedelta(days=7)).isoformat()
     upcoming = [g for g in all_games if g.get("status") == "scheduled" and today_str <= g.get("date", "") <= seven_days_later]
     games_by_date = {}
     for g in upcoming:
@@ -660,6 +687,16 @@ async def midday_update():
     """12:00 - Re-scrape schedule to update game info (pitchers/venue/time), keep existing odds."""
     today = date.today().isoformat()
     logger.info(f"[12:00] Updating game info for {today}")
+
+    ingest_age = _recent_schedule_ingest_age_min()
+    if ingest_age is not None:
+        logger.info(f"[12:00] schedule_last_ingest is {ingest_age}min old; skipping scrape")
+        today_scheduled = get_db()["games"].count_documents(
+            {"date": today, "status": "scheduled"}
+        )
+        if today_scheduled > 0:
+            _push_takamei_reminder()
+        return {"updated": 0, "skipped_scrape": True, "ingest_age_min": ingest_age}
 
     games = await cpbl_schedule.scrape_today_schedule()
     scheduled = [g for g in games if g.get("status") == "scheduled"]
