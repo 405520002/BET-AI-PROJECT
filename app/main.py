@@ -153,6 +153,40 @@ async def cron_weekly_awards(force: bool = False, x_cron_secret: Optional[str] =
     return result
 
 
+# --- Ingest Endpoints (residential-IP relay; HiNet CDN blocks datacenter ASNs on /standings/season) ---
+
+@app.post("/ingest/standings")
+async def ingest_standings(
+    request: Request,
+    x_cron_secret: Optional[str] = Header(None),
+):
+    """Receive raw https://www.cpbl.com.tw/standings/season HTML from a residential
+    client (e.g. iPhone Shortcut on cellular), parse it, and refresh the standings cache."""
+    _verify_cron(x_cron_secret)
+    raw = await request.body()
+    if not raw:
+        raise HTTPException(status_code=400, detail="empty body")
+    html = raw.decode("utf-8", errors="replace")
+
+    from app.scraper.cpbl_standings import _parse_standings_html
+    standings = _parse_standings_html(html)
+    if not standings or len(standings) < 6:
+        raise HTTPException(
+            status_code=400,
+            detail=f"parsed {len(standings)} teams, expected 6 (HTML may be the 404 page)",
+        )
+
+    from app.db.client import get_db
+    from datetime import date
+    get_db()["cache"].update_one(
+        {"_id": "standings"},
+        {"$set": {"data": standings, "updated_at": date.today().isoformat()}},
+        upsert=True,
+    )
+    logger.info(f"[ingest] Standings cache updated via residential relay: {len(standings)} teams")
+    return {"status": "ok", "teams": len(standings)}
+
+
 # --- Health Check ---
 
 @app.get("/health")
