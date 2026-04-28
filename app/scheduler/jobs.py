@@ -53,12 +53,18 @@ async def morning_job():
     # Scrape standings
     standings = await cpbl_standings.scrape_standings()
 
-    # Cache standings in DB for LINE bot
-    db["cache"].update_one(
-        {"_id": "standings"},
-        {"$set": {"data": standings, "updated_at": today_str}},
-        upsert=True,
-    )
+    # Cache standings in DB for LINE bot, but ONLY if scrape returned real data.
+    # If the scrape failed (e.g. HiNet CDN blocks datacenter ASNs on /standings/season)
+    # scrape_standings() returns the all-zero default. Writing that would clobber the
+    # iPhone Shortcut residential relay's good cache (POSTed via /ingest/standings).
+    if not cpbl_standings.is_default_standings(standings):
+        db["cache"].update_one(
+            {"_id": "standings"},
+            {"$set": {"data": standings, "updated_at": today_str}},
+            upsert=True,
+        )
+    else:
+        logger.warning("[08:00] scrape_standings returned default; keeping existing cache")
 
     # Scrape this month's schedule (and next month if near end of month)
     import time, random
@@ -803,15 +809,19 @@ async def _update_caches_after_settle():
     today_str = today_obj.isoformat()
 
     try:
-        # Update standings
+        # Update standings — but skip the write if scrape returned the default
+        # fallback (e.g. when HiNet blocks the datacenter IP), so we don't clobber
+        # the iPhone Shortcut residential relay's good cache.
         standings = await cpbl_standings.scrape_standings()
-        if standings:
+        if not cpbl_standings.is_default_standings(standings):
             db["cache"].update_one(
                 {"_id": "standings"},
                 {"$set": {"data": standings, "updated_at": today_str}},
                 upsert=True,
             )
             logger.info("[00:00] Updated standings cache")
+        else:
+            logger.warning("[00:00] scrape_standings returned default; keeping existing cache")
 
         _time.sleep(_random.uniform(1, 2))
 

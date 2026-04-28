@@ -174,3 +174,20 @@ def _default_standings() -> dict:
         }
         for code, name in TEAM_FULL_NAMES.items()
     }
+
+
+def is_default_standings(standings: dict | None) -> bool:
+    """True if standings is empty or matches the all-zero fallback shape.
+
+    Used by callers to decide whether to overwrite a possibly-real cache entry
+    (e.g. one populated by the iPhone Shortcut residential relay). Real
+    standings have at least one team with wins+losses > 0 OR a numeric ERA.
+    """
+    if not standings:
+        return True
+    for v in standings.values():
+        if v.get("wins", 0) + v.get("losses", 0) > 0:
+            return False
+        if v.get("team_era", "N/A") not in ("N/A", "", None):
+            return False
+    return True
