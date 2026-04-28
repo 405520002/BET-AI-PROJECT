@@ -187,6 +187,59 @@ async def ingest_standings(
     return {"status": "ok", "teams": len(standings)}
 
 
+@app.post("/ingest/schedule")
+async def ingest_schedule(
+    request: Request,
+    x_cron_secret: Optional[str] = Header(None),
+):
+    """Receive raw https://www.cpbl.com.tw/schedule/getgamedatas JSON from a residential
+    client (e.g. iPhone Shortcut on cellular), parse it, and upsert games. The
+    schedule API is the only path that carries announced starters (HomePitcherAcnt /
+    VisitingPitcherAcnt before HomePitcherName / VisitingPitcherName populate);
+    /box/getlive — the only path reachable from non-TW datacenter ASNs — does not."""
+    import json
+    from datetime import date
+
+    _verify_cron(x_cron_secret)
+    raw = await request.body()
+    if not raw:
+        raise HTTPException(status_code=400, detail="empty body")
+
+    try:
+        payload = json.loads(raw.decode("utf-8", errors="replace"))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"invalid JSON: {e}")
+
+    if not payload.get("Success"):
+        raise HTTPException(status_code=400, detail=f"payload Success=False: {payload}")
+    games_blob = payload.get("GameDatas")
+    if not games_blob:
+        raise HTTPException(status_code=400, detail="payload missing GameDatas")
+    try:
+        game_list = json.loads(games_blob) if isinstance(games_blob, str) else games_blob
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"GameDatas not parseable: {e}")
+    if not game_list:
+        return {"status": "ok", "games": 0}
+
+    from app.scraper.cpbl_schedule import _parse_games, apply_chinese_names
+    first_date = (game_list[0].get("GameDate") or "")[:10]
+    year = int(first_date[:4]) if first_date else date.today().year
+    month = int(first_date[5:7]) if first_date else date.today().month
+    games = apply_chinese_names(_parse_games(game_list, year, month, day=None))
+
+    from app.db import game_repo
+    for game in games:
+        gid = game.get("id", "")
+        existing = game_repo.get_game(gid)
+        if existing and "odds" in existing:
+            game["odds"] = existing["odds"]
+        game_repo.upsert_game(gid, game)
+
+    logger.info(f"[ingest] Schedule upserted via residential relay: {len(games)} games")
+    return {"status": "ok", "games": len(games)}
+
+
 # --- Health Check ---
 
 @app.get("/health")

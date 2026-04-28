@@ -199,13 +199,15 @@ def build_game_card(game: dict) -> dict:
                         },
                     ],
                 },
-                {
-                    "type": "text",
-                    "text": f"先發: {game.get('away_pitcher', 'TBD')} vs {game.get('home_pitcher', 'TBD')}",
-                    "color": "#CCCCCC",
-                    "size": "xs",
-                    "margin": "sm",
-                },
+                *(
+                    [{
+                        "type": "text",
+                        "text": f"先發: {game.get('away_pitcher') or 'TBD'} vs {game.get('home_pitcher') or 'TBD'}",
+                        "color": "#CCCCCC",
+                        "size": "xs",
+                        "margin": "sm",
+                    }] if (game.get("home_pitcher") or game.get("away_pitcher")) else []
+                ),
             ],
         },
         "body": {

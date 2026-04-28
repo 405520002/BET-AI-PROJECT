@@ -92,6 +92,20 @@ def apply_chinese_names(games: list[dict]) -> list[dict]:
     return games
 
 
+def _resolve_pitcher(name: str | None, acnt: str | None) -> str:
+    """Resolve the announced starter. Pre-game CPBL fills Acnt before Name; we
+    look the acnt up against player_names.json so the bot shows a real name
+    instead of blank as soon as the announcement is published."""
+    name = (name or "").strip()
+    if name:
+        return name
+    acnt = (acnt or "").strip()
+    if acnt:
+        from app.scraper.player_names import to_chinese_by_acnt
+        return to_chinese_by_acnt(acnt)
+    return ""
+
+
 async def scrape_today_schedule() -> list[dict]:
     """Scrape today's CPBL schedule via API."""
     today = date.today()
@@ -256,12 +270,19 @@ def _box_game_to_dict(g: dict, game_date: str) -> dict:
         "away_team_name": _to_chinese_name(away_name),
         "venue": _to_chinese_venue(g.get("FieldAbbe", "")),
         "game_time": (g.get("GameDateTimeS") or "")[11:16] or "18:35",
-        "home_pitcher": g.get("HomePitcherName") or "",
-        "away_pitcher": g.get("VisitingPitcherName") or "",
         "home_logo": (BASE_URL + home_logo_path) if home_logo_path else "",
         "away_logo": (BASE_URL + away_logo_path) if away_logo_path else "",
         "status": status,
     }
+    # /box/getlive does not carry the announced starter — only set the field
+    # when we actually have one, so a follow-up ingest with real data is not
+    # overwritten by a Mongo $set with empty string.
+    home_pitcher = _resolve_pitcher(g.get("HomePitcherName"), g.get("HomePitcherAcnt"))
+    away_pitcher = _resolve_pitcher(g.get("VisitingPitcherName"), g.get("VisitingPitcherAcnt"))
+    if home_pitcher:
+        out["home_pitcher"] = home_pitcher
+    if away_pitcher:
+        out["away_pitcher"] = away_pitcher
     if status == "final":
         out["home_score"] = g.get("HomeTotalScore", 0) or 0
         out["away_score"] = g.get("VisitingTotalScore", 0) or 0
@@ -321,12 +342,19 @@ def _parse_games(game_list: list[dict], year: int, month: int, day: int | None =
             "away_team_name": _to_chinese_name(g.get("VisitingTeamName", away_info["name"])),
             "venue": _to_chinese_venue(g.get("FieldAbbe", "")),
             "game_time": game_time,
-            "home_pitcher": g.get("HomePitcherName", "TBD"),
-            "away_pitcher": g.get("VisitingPitcherName", "TBD"),
             "home_logo": "https://www.cpbl.com.tw" + g.get("HomeClubSmallImgPath", "") if g.get("HomeClubSmallImgPath") else "",
             "away_logo": "https://www.cpbl.com.tw" + g.get("VisitingClubSmallImgPath", "") if g.get("VisitingClubSmallImgPath") else "",
             "status": status,
         }
+        # CPBL fills PitcherAcnt before PitcherName for announced starters; only
+        # set the field when we actually have one so $set upserts won't overwrite
+        # a previously-ingested name with an empty string.
+        home_pitcher = _resolve_pitcher(g.get("HomePitcherName"), g.get("HomePitcherAcnt"))
+        away_pitcher = _resolve_pitcher(g.get("VisitingPitcherName"), g.get("VisitingPitcherAcnt"))
+        if home_pitcher:
+            game["home_pitcher"] = home_pitcher
+        if away_pitcher:
+            game["away_pitcher"] = away_pitcher
 
         # If game is finished, include scores
         if status == "final":
