@@ -132,15 +132,28 @@ async def _scrape_via_box_fallback(year: int, month: int, day: int | None = None
     from app.scraper.http_client import get_cpbl_session, _ajax_headers, _browser_headers
     from app.db.client import get_db
 
+    from datetime import date as _date, timedelta as _td
+
     db = get_db()
     target_prefix = f"{year}-{month:02d}-"
 
+    # Seed from a recent-window max(game_sno), not the all-time max for the
+    # year — /ingest/schedule writes future-month games (CPBL pre-publishes
+    # the full season), and an all-time-max seed lands in those future months,
+    # making the forward walk exit on the first iteration with 0 games.
+    today = _date.today()
     latest = db["games"].find_one(
-        {"date": {"$regex": f"^{year}-"}, "game_sno": {"$gt": 0}},
+        {
+            "date": {
+                "$gte": (today - _td(days=7)).isoformat(),
+                "$lte": (today + _td(days=2)).isoformat(),
+            },
+            "game_sno": {"$gt": 0},
+        },
         sort=[("game_sno", -1)],
     )
     if not latest:
-        logger.warning("[box-fallback] no seed game_sno in db.games; cannot fall back")
+        logger.warning("[box-fallback] no seed game_sno in db.games (today±window); cannot fall back")
         return []
     seed_sno = max(1, (latest.get("game_sno") or 0) - 10)
     logger.info(f"[box-fallback] seeding from sno={seed_sno} for {year}-{month:02d}")
