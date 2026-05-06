@@ -9,6 +9,7 @@ import json
 import logging
 import re
 import time
+from collections import OrderedDict
 from datetime import datetime, timezone
 
 import httpx
@@ -17,9 +18,11 @@ logger = logging.getLogger(__name__)
 
 _STATS_BASE = "https://stats.cpbl.com.tw"
 _TTL = 600  # seconds
+_CACHE_MAX = 128  # bound cache to prevent memory growth from probing
+_ACNT_RE = re.compile(r"^\d{10}$")
 
-# Module-level TTL cache: acnt -> (timestamp, result_dict)
-_CACHE: dict[str, tuple[float, dict]] = {}
+# Bounded LRU cache: acnt -> (timestamp, result_dict)
+_CACHE: "OrderedDict[str, tuple[float, dict]]" = OrderedDict()
 
 _HEADERS = {
     "User-Agent": (
@@ -38,14 +41,19 @@ async def fetch_player_advanced_stats(acnt: str, bypass_cache: bool = False) -> 
         bypass_cache: If True, skip cache lookup and force a fresh fetch.
 
     Returns:
-        Structured dict on success, None on failure.
+        Structured dict on success, None on failure (incl. malformed acnt).
     """
+    if not _ACNT_RE.match(acnt):
+        logger.warning("Rejected malformed acnt: %r", acnt[:32])
+        return None
+
     now = time.monotonic()
 
-    # Cache check
+    # Cache check (LRU: move-to-end on hit)
     if not bypass_cache and acnt in _CACHE:
         ts, cached = _CACHE[acnt]
         if now - ts < _TTL:
+            _CACHE.move_to_end(acnt)
             logger.debug("Cache hit for player %s", acnt)
             return cached
 
@@ -67,6 +75,9 @@ async def fetch_player_advanced_stats(acnt: str, bypass_cache: bool = False) -> 
         return None
 
     _CACHE[acnt] = (time.monotonic(), result)
+    _CACHE.move_to_end(acnt)
+    while len(_CACHE) > _CACHE_MAX:
+        _CACHE.popitem(last=False)
     return result
 
 

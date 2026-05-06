@@ -37,4 +37,4 @@ def generate_player_summary(player: dict, axes: list[dict], user_query: str) -> 
         return resp.strip()
     except Exception as e:
         logger.warning("gemini_generate failed: %s", e)
-        return f"[AI 摘要產生失敗：{e}]"
+        return "[AI 摘要產生失敗，請稍後再試]"
