@@ -15,6 +15,8 @@ Daily flow:
          1. Scrape today's game results
          2. Settle all bets
 """
+from __future__ import annotations
+
 import logging
 from datetime import date, datetime, timedelta
 

@@ -5,7 +5,10 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Optional
 
+import asyncio
+
 from fastapi import FastAPI, Request, HTTPException, Header
+from fastapi.responses import JSONResponse, Response
 from linebot.v3.webhook import WebhookParser
 from linebot.v3.webhooks import (
     MessageEvent,
@@ -151,6 +154,53 @@ async def cron_weekly_awards(force: bool = False, x_cron_secret: Optional[str] =
     from app.scheduler.weekly_awards import push_weekly_awards
     result = push_weekly_awards(force=force)
     return result
+
+
+# === Player Stats Endpoints (cpbl-stat-player-summary) ===
+
+@app.get("/player/summary")
+async def player_summary(q: str):
+    """Resolve player by zh name, scrape advanced stats, return AI summary + radar URL."""
+    from app.scraper.player_lookup import parse_query, find_player
+    from app.scraper.cpbl_player_stats import fetch_player_advanced_stats
+    from app.services.player_summary_ai import generate_player_summary
+
+    name_part, rest = parse_query(q)
+    player_meta = find_player(name_part)
+    if player_meta is None:
+        return JSONResponse({"error": "找不到球員", "query": q}, status_code=404)
+
+    stats = await fetch_player_advanced_stats(player_meta["acnt"])
+    if stats is None:
+        return JSONResponse({"error": "球員頁面爬取失敗", "acnt": player_meta["acnt"]}, status_code=502)
+
+    summary = await asyncio.to_thread(generate_player_summary, stats, stats["axes"], rest)
+
+    return {
+        "player_name": stats["name_zh"],
+        "uniform_no": stats["uniform_no"],
+        "team": stats["team"],
+        "position": stats["position_zh"],
+        "role": stats["role"],
+        "player_url": stats["page_url"],
+        "axes": stats["axes"],
+        "summary": summary,
+        "radar_image_url": f"/player/radar.png?acnt={stats['acnt']}",
+    }
+
+
+@app.get("/player/radar.png")
+async def player_radar(acnt: str):
+    """Return cached PNG radar chart for the given player acnt."""
+    from app.scraper.cpbl_player_stats import fetch_player_advanced_stats
+    from app.services.radar_cache import get_or_render
+
+    stats = await fetch_player_advanced_stats(acnt)
+    if stats is None:
+        return JSONResponse({"error": "找不到球員"}, status_code=404)
+
+    png = await asyncio.to_thread(get_or_render, stats, stats["axes"])
+    return Response(content=png, media_type="image/png", headers={"Cache-Control": "public, max-age=1800"})
 
 
 # --- Ingest Endpoints (residential-IP relay; HiNet CDN blocks datacenter ASNs on /standings/season) ---
