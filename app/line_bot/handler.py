@@ -11,6 +11,7 @@ from linebot.v3.messaging import (
     ReplyMessageRequest,
     FlexMessage,
     FlexContainer,
+    ImageMessage,
     TextMessage,
 )
 from linebot.v3.webhooks import (
@@ -54,6 +55,13 @@ def _reply(reply_token: str, messages: list):
                     FlexMessage(
                         alt_text=msg.get("altText", "訊息"),
                         contents=FlexContainer.from_dict(msg["contents"]),
+                    )
+                )
+            elif msg.get("type") == "image":
+                line_messages.append(
+                    ImageMessage(
+                        original_content_url=msg["original"],
+                        preview_image_url=msg.get("preview", msg["original"]),
                     )
                 )
             elif msg.get("type") == "text":
@@ -187,17 +195,27 @@ def handle_text_message(event: MessageEvent):
     elif cmd == "help":
         _handle_help(event)
     else:
-        _reply(event.reply_token, [
-            "我不太懂你的意思 😅\n\n"
-            "試試以下指令:\n"
-            "🏟️ 今日賽事\n"
-            "💰 儲值\n"
-            "📊 我的戰績\n"
-            "🏆 排行榜\n"
-            "⚾ 球隊戰績\n"
-            "📋 我的注單\n"
-            "❓ 說明"
-        ])
+        # Free-form text: ask LLM whether this is a player query before falling
+        # back to the generic help. Keeps menu commands fast (no LLM hop) while
+        # letting natural questions like "王柏融最近狀態如何" route to the
+        # /player/summary pipeline.
+        from app.line_bot.intent_router import classify_player_intent
+        intent = classify_player_intent(text)
+        if intent.get("intent") == "player":
+            _handle_player_query(event, intent["name"], intent.get("rest", ""))
+        else:
+            _reply(event.reply_token, [
+                "我不太懂你的意思 😅\n\n"
+                "試試以下指令:\n"
+                "🏟️ 今日賽事\n"
+                "💰 儲值\n"
+                "📊 我的戰績\n"
+                "🏆 排行榜\n"
+                "⚾ 球隊戰績\n"
+                "📋 我的注單\n"
+                "❓ 說明\n\n"
+                "或直接問我某位球員的表現，例如「王柏融最近狀態如何」"
+            ])
 
 
 def handle_postback(event: PostbackEvent):
@@ -719,6 +737,54 @@ def _handle_bets_settled(event, user_id: str):
 def _handle_help(event):
     msg = flex_messages.build_help()
     _reply(event.reply_token, [msg])
+
+
+def _handle_player_query(event, name: str, rest: str):
+    """Resolve a player by zh name, fetch advanced stats, reply with AI summary
+    + radar PNG. The radar image is served by /player/radar.png (rendered/cached
+    in app/services/radar_cache.py); LINE needs an HTTPS public URL, which we
+    build from settings.public_url.
+
+    The webhook in app/main.py is async, so this sync handler is called while
+    the request loop is parked. asyncio.run() would error in that context —
+    drive the coroutine in a worker thread with its own loop instead.
+    """
+    import asyncio
+    import concurrent.futures
+
+    from app.scraper.player_lookup import find_player
+    from app.scraper.cpbl_player_stats import fetch_player_advanced_stats
+    from app.services.player_summary_ai import generate_player_summary
+
+    player_meta = find_player(name)
+    if player_meta is None:
+        _reply(event.reply_token, [
+            f"找不到「{name}」這位球員 😅\n要不要提供英文名或所屬隊伍再試一次？"
+        ])
+        return
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        stats = pool.submit(
+            asyncio.run, fetch_player_advanced_stats(player_meta["acnt"])
+        ).result()
+    if stats is None:
+        _reply(event.reply_token, [
+            f"抓不到「{player_meta['name_zh']}」的進階數據，可能球員頁面暫時掛了，等等再試 🙏"
+        ])
+        return
+
+    summary = generate_player_summary(stats, stats.get("axes", []), rest or "")
+
+    messages: list = [{"type": "text", "text": summary}]
+    base = (settings.public_url or "").rstrip("/")
+    if base:
+        png_url = f"{base}/player/radar.png?acnt={player_meta['acnt']}"
+        messages.append({
+            "type": "image",
+            "original": png_url,
+            "preview": png_url,
+        })
+    _reply(event.reply_token, messages)
 
 
 # --- Bet Flow ---

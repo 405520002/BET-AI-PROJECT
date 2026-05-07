@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     # App
     env: str = "development"
     cron_secret: str = ""  # protect cron endpoints
+    public_url: str = ""  # Caddy-fronted base URL (used to build LINE image URLs)
 
     # Betting limits
     daily_deposit_cap: int = 10_000
