@@ -9,5 +9,4 @@ apscheduler>=3.10.0
 pydantic>=2.6.0
 pydantic-settings>=2.2.0
 python-dotenv>=1.0.0
-matplotlib>=3.7,<4
 Pillow>=10
