@@ -152,6 +152,8 @@ def _parse_player_page(html: str, acnt: str, page_url: str) -> dict | None:
         )
         return None
 
+    axes = _apply_role_view(role, axes)
+
     return {
         "acnt": acnt,
         "name_zh": name_zh,
@@ -163,3 +165,47 @@ def _parse_player_page(html: str, acnt: str, page_url: str) -> dict | None:
         "axes": axes,
         "scraped_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
+
+
+# Pitcher axis labels coming out of stats.cpbl.com.tw are batter-side stats
+# (CPBL's advanced page only publishes opposing-batter axes for pitchers, not
+# pitcher axes like ERA/WHIP). The bare label "打擊率" on a pitcher's chart is
+# misleading — what's actually plotted is opponent BA against him. Prefix with
+# "被" so the label reads "被打擊率" and invert the percentile so the radar
+# stays "bigger polygon = better player" regardless of role.
+_PITCHER_OPPOSING_RELABEL = {
+    "加權上壘率": "被加權上壘率",
+    "打擊率": "被打擊率",
+    "長打率": "被長打率",
+    "純長打率": "被純長打率",
+    "上壘率": "被上壘率",
+    "出色擊球數": "被出色擊球數",
+    "出色擊球%": "被出色擊球%",
+    "擊球初速 Avg": "被擊球初速 Avg",
+    "擊球初速 Max": "被擊球初速 Max",
+    "強擊球率": "被強擊球率",
+}
+# 三振%, 揮空%, 追打% measure batter behavior the pitcher *induces* — higher
+# raw value already means a better pitcher, so don't invert. 保送% is the
+# walk rate against him, lower raw is better → invert.
+_PITCHER_INVERT_NAMES = set(_PITCHER_OPPOSING_RELABEL.keys()) | {"保送%"}
+
+
+def _apply_role_view(role: str, axes: list[dict]) -> list[dict]:
+    """Rewrite axes for the player's role.
+
+    Batter: identity (CPBL's PR is already 'higher = better').
+    Pitcher: relabel opposing-batter stats with "被" prefix and invert PR
+             so the radar reads consistently across roles.
+    """
+    if role != "pitcher":
+        return axes
+    out: list[dict] = []
+    for a in axes:
+        name = a["name"]
+        value = a["value"]
+        new_name = _PITCHER_OPPOSING_RELABEL.get(name, name)
+        if name in _PITCHER_INVERT_NAMES:
+            value = 100 - value
+        out.append({"name": new_name, "value": value})
+    return out
