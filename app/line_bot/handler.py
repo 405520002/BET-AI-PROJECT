@@ -747,26 +747,30 @@ def _handle_player_query(event, name: str, rest: str):
 
     The webhook in app/main.py is async, so this sync handler is called while
     the request loop is parked. asyncio.run() would error in that context —
-    drive the coroutine in a worker thread with its own loop instead.
+    drive each coroutine in a worker thread with its own loop instead.
     """
     import asyncio
     import concurrent.futures
 
-    from app.scraper.player_lookup import find_player
+    from app.scraper.player_lookup import find_player_async
     from app.scraper.cpbl_player_stats import fetch_player_advanced_stats
     from app.services.player_summary_ai import generate_player_summary
 
-    player_meta = find_player(name)
+    def _await(coro):
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            return pool.submit(asyncio.run, coro).result()
+
+    # find_player_async tries DB first, then Wikipedia (~1.5s on miss),
+    # validates against stats.cpbl.com.tw, and caches the hit back to
+    # db.player_roster so the next query short-circuits.
+    player_meta = _await(find_player_async(name))
     if player_meta is None:
         _reply(event.reply_token, [
             f"找不到「{name}」這位球員 😅\n要不要提供英文名或所屬隊伍再試一次？"
         ])
         return
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-        stats = pool.submit(
-            asyncio.run, fetch_player_advanced_stats(player_meta["acnt"])
-        ).result()
+    stats = _await(fetch_player_advanced_stats(player_meta["acnt"]))
     if stats is None:
         _reply(event.reply_token, [
             f"抓不到「{player_meta['name_zh']}」的進階數據，可能球員頁面暫時掛了，等等再試 🙏"

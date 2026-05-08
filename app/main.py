@@ -40,6 +40,17 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("CPBL Betting Bot starting up")
+    # One-shot DB seed: copy app/scraper/player_names.json into db.player_roster
+    # the first time the collection is empty. After that, all roster writes
+    # come from the daily Wiki refresh, /ingest/roster, or runtime fallback.
+    try:
+        from app.db import roster_repo
+        seeded = roster_repo.seed_from_json_if_empty()
+        if seeded:
+            logger.info(f"Roster seeded from JSON: {seeded} players")
+    except Exception as e:
+        logger.warning(f"Roster seed skipped: {e}")
+
     # Start background notification checker (only in one worker via file lock)
     import os, fcntl
     scheduler = None
@@ -50,10 +61,14 @@ async def lifespan(app: FastAPI):
         from apscheduler.schedulers.background import BackgroundScheduler
         scheduler = BackgroundScheduler(timezone="Asia/Taipei")
         scheduler.add_job(_check_notifications, "interval", seconds=30, id="notify_checker")
+        # Daily 04:00 Asia/Taipei: refresh roster from Wikipedia categories.
+        # Wikipedia isn't geo-blocked (unlike www.cpbl.com.tw) so this runs
+        # autonomously on the VM regardless of region.
+        scheduler.add_job(_refresh_wiki_roster, "cron", hour=4, minute=0, id="wiki_roster_refresh")
         scheduler.start()
-        logger.info("Notification checker started (every 30s)")
+        logger.info("Notification checker started (every 30s); Wiki refresh scheduled 04:00")
     except (IOError, OSError):
-        logger.info("Notification checker already running in another worker")
+        logger.info("Schedulers already running in another worker")
     yield
     if scheduler:
         scheduler.shutdown()
@@ -71,6 +86,31 @@ def _check_notifications():
         loop.close()
     except Exception as e:
         logger.error(f"Notification checker error: {e}")
+
+
+def _refresh_wiki_roster():
+    """Background daily job: rebuild player roster via zh.wikipedia.org
+    per-team category sweep. Higher-trust seed/shortcut entries are
+    preserved by roster_repo's priority logic."""
+    import asyncio
+    try:
+        from app.scraper.wiki_lookup import refresh_wiki_roster
+        from app.db import roster_repo
+
+        loop = asyncio.new_event_loop()
+        try:
+            roster = loop.run_until_complete(refresh_wiki_roster())
+        finally:
+            loop.close()
+
+        records = [
+            {"name": name, "acnt": v["acnt"], "team": v["team"]}
+            for name, v in roster.items()
+        ]
+        n = roster_repo.bulk_upsert(records, team="", source="wiki")
+        logger.info(f"Wiki roster refresh: {n}/{len(records)} entries upserted")
+    except Exception as e:
+        logger.error(f"Wiki roster refresh failed: {e}", exc_info=True)
 
 
 app = FastAPI(title="CPBL Virtual Betting Bot", lifespan=lifespan)
@@ -204,6 +244,47 @@ async def player_radar(acnt: str):
 
 
 # --- Ingest Endpoints (residential-IP relay; HiNet CDN blocks datacenter ASNs on /standings/season) ---
+
+@app.post("/ingest/roster")
+async def ingest_roster(
+    request: Request,
+    team: str = "",
+    x_cron_secret: Optional[str] = Header(None),
+):
+    """Receive raw www.cpbl.com.tw/team?ClubNo=X HTML from a TW-IP residential
+    relay (iPhone Shortcut), parse the player anchors, and upsert each entry
+    into db.player_roster as source='shortcut' (highest trust)."""
+    _verify_cron(x_cron_secret)
+    raw = await request.body()
+    if not raw:
+        raise HTTPException(status_code=400, detail="empty body")
+    if not team:
+        raise HTTPException(status_code=400, detail="missing 'team' query param")
+
+    html = raw.decode("utf-8", errors="replace")
+    from app.scraper.cpbl_team_roster import parse_team_roster
+    records = parse_team_roster(html)
+    if not records:
+        raise HTTPException(
+            status_code=400,
+            detail="no player anchors parsed (HTML may be a 404 page)",
+        )
+
+    from app.db import roster_repo
+    n = roster_repo.bulk_upsert(records, team=team, source="shortcut")
+    logger.info(f"[ingest/roster] {team}: {n}/{len(records)} upserted via shortcut")
+    return {"status": "ok", "team": team, "parsed": len(records), "upserted": n}
+
+
+@app.post("/cron/refresh-roster")
+async def cron_refresh_roster(x_cron_secret: Optional[str] = Header(None)):
+    """Manual trigger for the daily Wiki refresh — useful for first-time
+    deploys where you don't want to wait until 04:00 the next day."""
+    _verify_cron(x_cron_secret)
+    _refresh_wiki_roster()
+    from app.db import roster_repo
+    return {"status": "ok", "roster_count": roster_repo.count()}
+
 
 @app.post("/ingest/standings")
 async def ingest_standings(
