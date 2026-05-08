@@ -65,8 +65,18 @@ async def lifespan(app: FastAPI):
         # Wikipedia isn't geo-blocked (unlike www.cpbl.com.tw) so this runs
         # autonomously on the VM regardless of region.
         scheduler.add_job(_refresh_wiki_roster, "cron", hour=4, minute=0, id="wiki_roster_refresh")
+        # Schedule + announced starters from today.line.me. Replaces the
+        # iPhone Shortcut → /ingest/schedule path: today.line.me has the
+        # same data but is reachable from non-TW IPs. 07:30 catches CPBL's
+        # morning pitcher announcements before morning_job at 08:00; 12:30
+        # picks up midday updates.
+        scheduler.add_job(_refresh_line_schedule, "cron", hour=7, minute=30, id="line_schedule_morning")
+        scheduler.add_job(_refresh_line_schedule, "cron", hour=12, minute=30, id="line_schedule_midday")
         scheduler.start()
-        logger.info("Notification checker started (every 30s); Wiki refresh scheduled 04:00")
+        logger.info(
+            "Notification checker started (every 30s); Wiki refresh 04:00; "
+            "LINE Today schedule refresh 07:30 + 12:30"
+        )
     except (IOError, OSError):
         logger.info("Schedulers already running in another worker")
     yield
@@ -120,6 +130,54 @@ def _refresh_wiki_roster():
         )
     except Exception as e:
         logger.error(f"Wiki roster refresh failed: {e}", exc_info=True)
+
+
+async def _refresh_line_schedule_async() -> dict:
+    """Pull the full-season schedule from today.line.me, upsert each game
+    into db.games (preserving any existing odds field), and bump the
+    `schedule_last_ingest` cache marker so morning_job's freshness check
+    short-circuits the slow box-fallback."""
+    from datetime import datetime
+    from app.scraper.line_today_schedule import fetch_line_today_schedule
+    from app.db import game_repo
+    from app.db.client import get_db
+
+    games = await fetch_line_today_schedule()
+    if not games:
+        return {"status": "no_games", "scanned": 0, "upserted": 0}
+
+    upserted = 0
+    pitchers_filled = 0
+    for game in games:
+        gid = game["id"]
+        existing = game_repo.get_game(gid)
+        if existing and "odds" in existing:
+            game["odds"] = existing["odds"]
+        game_repo.upsert_game(gid, game)
+        upserted += 1
+        if game.get("home_pitcher") or game.get("away_pitcher"):
+            pitchers_filled += 1
+
+    get_db()["cache"].update_one(
+        {"_id": "schedule_last_ingest"},
+        {"$set": {"updated_at": datetime.now(), "games_count": upserted, "source": "line_today"}},
+        upsert=True,
+    )
+    return {"status": "ok", "scanned": len(games), "upserted": upserted, "pitchers_filled": pitchers_filled}
+
+
+def _refresh_line_schedule():
+    """Sync wrapper for APScheduler — see _refresh_wiki_roster for the same
+    pattern."""
+    import asyncio
+    try:
+        result = asyncio.run(_refresh_line_schedule_async())
+        logger.info(
+            f"LINE Today schedule refresh: {result.get('upserted')} games "
+            f"({result.get('pitchers_filled')} with announced pitchers)"
+        )
+    except Exception as e:
+        logger.error(f"LINE Today schedule refresh failed: {e}", exc_info=True)
 
 
 app = FastAPI(title="CPBL Virtual Betting Bot", lifespan=lifespan)
@@ -293,6 +351,15 @@ async def cron_refresh_roster(x_cron_secret: Optional[str] = Header(None)):
     _verify_cron(x_cron_secret)
     result = await _refresh_wiki_roster_async()
     return {"status": "ok", **result}
+
+
+@app.post("/cron/refresh-line-schedule")
+async def cron_refresh_line_schedule(x_cron_secret: Optional[str] = Header(None)):
+    """Manual trigger for today.line.me schedule scrape. Returns immediately
+    after the upsert — single HTTP fetch, ~1-2 seconds."""
+    _verify_cron(x_cron_secret)
+    result = await _refresh_line_schedule_async()
+    return result
 
 
 @app.post("/ingest/standings")
