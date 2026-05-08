@@ -88,27 +88,36 @@ def _check_notifications():
         logger.error(f"Notification checker error: {e}")
 
 
+async def _refresh_wiki_roster_async() -> dict:
+    """Rebuild player roster via zh.wikipedia.org per-team category sweep.
+    Higher-trust seed/shortcut entries are preserved by roster_repo's
+    priority logic. Returns a stats dict with scanned/upserted counts."""
+    from app.scraper.wiki_lookup import refresh_wiki_roster
+    from app.db import roster_repo
+
+    roster = await refresh_wiki_roster()
+    records = [
+        {"name": name, "acnt": v["acnt"], "team": v["team"]}
+        for name, v in roster.items()
+    ]
+    n = roster_repo.bulk_upsert(records, team="", source="wiki")
+    return {
+        "scanned": len(records),
+        "upserted": n,
+        "roster_count": roster_repo.count(),
+    }
+
+
 def _refresh_wiki_roster():
-    """Background daily job: rebuild player roster via zh.wikipedia.org
-    per-team category sweep. Higher-trust seed/shortcut entries are
-    preserved by roster_repo's priority logic."""
+    """Sync wrapper for APScheduler (its worker threads have no running loop,
+    so asyncio.run is safe). FastAPI endpoints should await
+    _refresh_wiki_roster_async directly to avoid the running-loop conflict."""
     import asyncio
     try:
-        from app.scraper.wiki_lookup import refresh_wiki_roster
-        from app.db import roster_repo
-
-        loop = asyncio.new_event_loop()
-        try:
-            roster = loop.run_until_complete(refresh_wiki_roster())
-        finally:
-            loop.close()
-
-        records = [
-            {"name": name, "acnt": v["acnt"], "team": v["team"]}
-            for name, v in roster.items()
-        ]
-        n = roster_repo.bulk_upsert(records, team="", source="wiki")
-        logger.info(f"Wiki roster refresh: {n}/{len(records)} entries upserted")
+        result = asyncio.run(_refresh_wiki_roster_async())
+        logger.info(
+            f"Wiki roster refresh: {result['upserted']}/{result['scanned']} upserted"
+        )
     except Exception as e:
         logger.error(f"Wiki roster refresh failed: {e}", exc_info=True)
 
@@ -279,11 +288,11 @@ async def ingest_roster(
 @app.post("/cron/refresh-roster")
 async def cron_refresh_roster(x_cron_secret: Optional[str] = Header(None)):
     """Manual trigger for the daily Wiki refresh — useful for first-time
-    deploys where you don't want to wait until 04:00 the next day."""
+    deploys where you don't want to wait until 04:00 the next day. Blocks
+    for ~2-3 minutes while ~700 player Wikipedia pages are fetched."""
     _verify_cron(x_cron_secret)
-    _refresh_wiki_roster()
-    from app.db import roster_repo
-    return {"status": "ok", "roster_count": roster_repo.count()}
+    result = await _refresh_wiki_roster_async()
+    return {"status": "ok", **result}
 
 
 @app.post("/ingest/standings")
