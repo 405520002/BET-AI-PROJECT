@@ -11,6 +11,7 @@ import re
 import time
 from collections import OrderedDict
 from datetime import datetime, timezone
+from urllib.parse import unquote
 
 import httpx
 
@@ -163,8 +164,88 @@ def _parse_player_page(html: str, acnt: str, page_url: str) -> dict | None:
         "role": role,
         "page_url": page_url,
         "axes": axes,
+        "profile": _parse_profile(html, team),
         "scraped_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
+
+
+# Bio labels rendered on the page as <p>{label}</p><p>{value}</p>. The css class
+# is emotion-generated (`css-7lrzga` / `css-nrf6mu`) and stable for a given
+# build, but we match label-content rather than class hash so a stats.cpbl
+# rebuild that re-rolls the hashes does not silently drop the whole bio.
+_PROFILE_LABELS = {
+    "身高(cm)": "height_cm",
+    "體重(kg)": "weight_kg",
+    "年齡": "age",
+    "學歷": "school",
+    "生日": "birthday",
+    "原名": "original_name",
+}
+
+_THROW_BAT_CHAR_ZH = {"R": "右", "L": "左", "S": "雙"}
+
+
+def _decode_throws_bats(code: str) -> str:
+    """`投打習慣: R` / `RR` / `RL` → 右投右打 / 右投左打.
+
+    The meta description on stats.cpbl.com.tw collapses to a single letter when
+    throw and bat are the same hand (e.g. `R` for 右投右打). Two letters means
+    throw-then-bat.
+    """
+    if len(code) == 1 and code in _THROW_BAT_CHAR_ZH:
+        side = _THROW_BAT_CHAR_ZH[code]
+        return f"{side}投{side}打"
+    if len(code) == 2:
+        t = _THROW_BAT_CHAR_ZH.get(code[0], code[0])
+        b = _THROW_BAT_CHAR_ZH.get(code[1], code[1])
+        return f"{t}投{b}打"
+    return code
+
+
+def _parse_profile(html: str, team: str) -> dict:
+    """Extract bio + photo + team logo from the player page.
+
+    Most fields come from <meta og:image> / <meta description> (cleanest, no
+    Next.js image proxy), with the rest from the `<p>label</p><p>value</p>`
+    pairs in the player-brief block. Returns empty dict on a fully unmatched
+    page rather than failing — the caller still gets stats/axes.
+    """
+    profile: dict = {}
+
+    m = re.search(r'<meta property="og:image" content="([^"]+)"', html)
+    if m:
+        profile["photo_url"] = unquote(m.group(1))
+
+    m = re.search(r"投打習慣:\s*([A-Za-z]+)", html)
+    if m:
+        code = m.group(1)
+        profile["throws_bats_code"] = code
+        profile["throws_bats"] = _decode_throws_bats(code)
+
+    for label, key in _PROFILE_LABELS.items():
+        m = re.search(
+            r"<p[^>]*>" + re.escape(label) + r"</p>\s*<p[^>]*>([^<]+)</p>", html
+        )
+        if m:
+            profile[key] = m.group(1).strip()
+
+    # Team logo: prefer the canonical 6-team map shared with the schedule
+    # ingest. Trying to alt="..."-match the page is unreliable: CPBL never
+    # uploaded the Rakuten Monkeys / 台鋼雄鷹 logos to their file_pool, so
+    # the page silently falls back to a 6-team banner / monochrome stub.
+    if team:
+        from app.scraper.line_today_schedule import (
+            _TEAM_NAME_TO_CODE,
+            _TEAM_LOGO_URL,
+        )
+        # Minor-league players carry "{team}二軍" in the title; treat them as
+        # the parent club for logo purposes.
+        team_key = team[:-2] if team.endswith("二軍") else team
+        code = _TEAM_NAME_TO_CODE.get(team_key)
+        if code and code in _TEAM_LOGO_URL:
+            profile["team_logo_url"] = _TEAM_LOGO_URL[code]
+
+    return profile
 
 
 # Pitcher axis labels coming out of stats.cpbl.com.tw are batter-side stats

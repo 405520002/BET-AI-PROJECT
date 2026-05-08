@@ -779,16 +779,11 @@ def _handle_player_query(event, name: str, rest: str):
 
     summary = generate_player_summary(stats, stats.get("axes", []), rest or "")
 
-    messages: list = [{"type": "text", "text": summary}]
     base = (settings.public_url or "").rstrip("/")
-    if base:
-        png_url = f"{base}/player/radar.png?acnt={player_meta['acnt']}"
-        messages.append({
-            "type": "image",
-            "original": png_url,
-            "preview": png_url,
-        })
-    _reply(event.reply_token, messages)
+    radar_url = f"{base}/player/radar.png?acnt={player_meta['acnt']}" if base else None
+    _reply(event.reply_token, [
+        flex_messages.build_player_card(stats, summary, radar_url),
+    ])
 
 
 # --- Bet Flow ---

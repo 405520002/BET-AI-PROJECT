@@ -1704,6 +1704,129 @@ def _kv_row(key: str, value: str) -> dict:
     }
 
 
+def build_player_card(player: dict, summary: str, radar_url: str | None = None) -> dict:
+    """Single Flex bubble for an AI player query.
+
+    Layout: hero photo → name/#/team-logo header strip → bio rows → AI summary
+    → radar PNG. Falls back gracefully if any field is missing (e.g. minor
+    leaguers may not have a photo or full bio).
+    """
+    profile = player.get("profile", {}) or {}
+    name = player.get("name_zh", "")
+    no = player.get("uniform_no", "")
+    team = player.get("team", "")
+    position = player.get("position_zh", "")
+    photo_url = profile.get("photo_url")
+    team_logo = profile.get("team_logo_url")
+
+    body_contents: list = []
+
+    # Identity row: name #no   [logo] team
+    name_row_left: list = [
+        {"type": "text", "text": name, "size": "xl", "weight": "bold", "color": "#1A1A1A", "flex": 0},
+    ]
+    if no:
+        name_row_left.append({
+            "type": "text", "text": f"#{no}", "size": "md",
+            "color": "#888888", "flex": 0, "margin": "sm", "gravity": "bottom",
+        })
+    name_row_right: list = []
+    if team_logo:
+        name_row_right.append({
+            "type": "image", "url": team_logo, "size": "24px",
+            "aspectMode": "fit", "flex": 0,
+        })
+    if team:
+        name_row_right.append({
+            "type": "text", "text": team, "size": "sm",
+            "color": "#555555", "flex": 0, "margin": "sm", "gravity": "center",
+        })
+    body_contents.append({
+        "type": "box",
+        "layout": "horizontal",
+        "alignItems": "center",
+        "contents": [
+            {"type": "box", "layout": "horizontal", "contents": name_row_left, "flex": 5},
+            {"type": "box", "layout": "horizontal", "alignItems": "center",
+             "contents": name_row_right, "flex": 4, "spacing": "xs"},
+        ],
+    })
+
+    if position:
+        body_contents.append({
+            "type": "text", "text": position,
+            "size": "sm", "color": "#888888", "margin": "xs",
+        })
+
+    # Bio rows
+    bio_rows: list = []
+    h = profile.get("height_cm")
+    w = profile.get("weight_kg")
+    if h or w:
+        bio_rows.append(_kv_row("身高 / 體重", f"{h or '-'} cm / {w or '-'} kg"))
+    if profile.get("throws_bats"):
+        bio_rows.append(_kv_row("投打", profile["throws_bats"]))
+    bday = profile.get("birthday")
+    age = profile.get("age")
+    if bday:
+        bio_rows.append(_kv_row("生日", f"{bday}（{age} 歲）" if age else bday))
+    if profile.get("school"):
+        bio_rows.append(_kv_row("學歷", profile["school"]))
+    orig = profile.get("original_name")
+    if orig and orig != name:
+        bio_rows.append(_kv_row("原名", orig))
+
+    if bio_rows:
+        body_contents.append({"type": "separator", "margin": "md"})
+        body_contents.append({
+            "type": "box", "layout": "vertical", "spacing": "sm",
+            "margin": "md", "contents": bio_rows,
+        })
+
+    if summary:
+        body_contents.append({"type": "separator", "margin": "md"})
+        body_contents.append({
+            "type": "text", "text": summary, "size": "sm",
+            "color": "#222222", "wrap": True, "margin": "md",
+        })
+
+    if radar_url:
+        body_contents.append({"type": "separator", "margin": "md"})
+        body_contents.append({
+            "type": "image", "url": radar_url,
+            "size": "full", "aspectMode": "fit",
+            "aspectRatio": "1:1", "margin": "md",
+        })
+
+    bubble: dict = {
+        "type": "bubble",
+        "size": "mega",
+        "body": {
+            "type": "box",
+            "layout": "vertical",
+            "spacing": "sm",
+            "paddingAll": "15px",
+            "contents": body_contents,
+        },
+    }
+    if photo_url:
+        # CPBL portrait headshots are ~3:4. aspectMode cover preserves the
+        # crop centre — usually torso/face — without distortion.
+        bubble["hero"] = {
+            "type": "image",
+            "url": photo_url,
+            "size": "full",
+            "aspectMode": "cover",
+            "aspectRatio": "3:4",
+        }
+
+    return {
+        "type": "flex",
+        "altText": f"{name} 球員資料" if name else "球員資料",
+        "contents": bubble,
+    }
+
+
 def _quick_bet_button(amount: int) -> dict:
     return {
         "type": "button",
