@@ -42,6 +42,20 @@ _TEAM_NAME_TO_CODE = {
     "台鋼雄鷹": "AKP",
 }
 
+# LINE Today's schedule JSON does not carry team logo URLs, so hardcode them.
+# Five clubs use the cpbl.com.tw file_pool paths that the old
+# /schedule/getgamedatas response used to serve as HomeClubSmallImgPath.
+# Rakuten Monkeys is missing from cpbl.com.tw's pool (Lamigo→Rakuten rebrand
+# left it stale), so fall back to Wikipedia's stable mirror for that one.
+_TEAM_LOGO_URL = {
+    "ACN": "https://www.cpbl.com.tw/files/file_pool/1/0l109765754453009797/logo_brothers.png",
+    "ADD": "https://www.cpbl.com.tw/files/file_pool/1/0l109765753819131779/logo_lions.png",
+    "AEO": "https://www.cpbl.com.tw/files/file_pool/1/0l109765753631383724/logo_fubon.png",
+    "AAA": "https://www.cpbl.com.tw/files/file_pool/1/0l109765752096404797/logo_dragon.png",
+    "AKP": "https://www.cpbl.com.tw/files/file_pool/1/0n255385839510091777/tsg-logo0912.png",
+    "AJL": "https://upload.wikimedia.org/wikipedia/zh/e/e2/Rakuten_Monkeys_logo.png",
+}
+
 # LINE Today uses formal/長 stadium names; map to the short names already
 # stored in DB by the box-fallback path so downstream Flex cards render
 # consistently.
@@ -157,8 +171,8 @@ def _parse_one(g: dict) -> dict | None:
             "away_team_name": away_name,
             "venue": venue,
             "game_time": time_str,
-            "home_logo": "",
-            "away_logo": "",
+            "home_logo": _TEAM_LOGO_URL.get(home_code, ""),
+            "away_logo": _TEAM_LOGO_URL.get(away_code, ""),
             "status": status,
         }
 
