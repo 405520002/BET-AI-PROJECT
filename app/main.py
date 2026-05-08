@@ -201,12 +201,12 @@ async def cron_weekly_awards(force: bool = False, x_cron_secret: Optional[str] =
 @app.get("/player/summary")
 async def player_summary(q: str):
     """Resolve player by zh name, scrape advanced stats, return AI summary + radar URL."""
-    from app.scraper.player_lookup import parse_query, find_player
+    from app.scraper.player_lookup import parse_query, find_player_async
     from app.scraper.cpbl_player_stats import fetch_player_advanced_stats
     from app.services.player_summary_ai import generate_player_summary
 
     name_part, rest = parse_query(q)
-    player_meta = find_player(name_part)
+    player_meta = await find_player_async(name_part)
     if player_meta is None:
         return JSONResponse({"error": "找不到球員", "query": q}, status_code=404)
 
