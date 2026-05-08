@@ -1,0 +1,835 @@
+{
+  "updated_at": "2026-04-24",
+  "players": {
+    "CHEN Chieh Hsien": {
+      "zh": "陳傑憲",
+      "team": "統一7-ELEVEn獅",
+      "acnt": "0000001804"
+    },
+    "Nick NELSON": {
+      "zh": "黎克",
+      "team": "中信兄弟",
+      "acnt": "0000007787"
+    },
+    "LEE Chen Chang": {
+      "zh": "李振昌",
+      "team": "中信兄弟",
+      "acnt": "0000003331"
+    },
+    "Mario SANCHEZ": {
+      "zh": "勝騎士",
+      "team": "中信兄弟",
+      "acnt": "0000005604"
+    },
+    "Nivaldo RODRIGUEZ": {
+      "zh": "羅戈",
+      "team": "中信兄弟",
+      "acnt": "0000005151"
+    },
+    "CHENG Hao Chun": {
+      "zh": "鄭浩均",
+      "team": "中信兄弟",
+      "acnt": "0000002345"
+    },
+    "TENG Chao Chun": {
+      "zh": "鄧朝駿",
+      "team": "中信兄弟",
+      "acnt": "0000007279"
+    },
+    "YU Chien": {
+      "zh": "余謙",
+      "team": "中信兄弟",
+      "acnt": "0000006176"
+    },
+    "TSAI Chi Che": {
+      "zh": "蔡齊哲",
+      "team": "中信兄弟",
+      "acnt": "0000000778"
+    },
+    "LU Yen Ching": {
+      "zh": "呂彥青",
+      "team": "中信兄弟",
+      "acnt": "0000003639"
+    },
+    "CHEN Hu": {
+      "zh": "陳琥",
+      "team": "中信兄弟",
+      "acnt": "0000000771"
+    },
+    "HSIEH Jung Hao": {
+      "zh": "謝榮豪",
+      "team": "中信兄弟",
+      "acnt": "0000003506"
+    },
+    "CHEN Kuan Ying": {
+      "zh": "陳冠穎",
+      "team": "中信兄弟",
+      "acnt": "0000007283"
+    },
+    "CHIEH Ko Lun": {
+      "zh": "錢可倫",
+      "team": "中信兄弟",
+      "acnt": "0000007622"
+    },
+    "CHEN Tong En": {
+      "zh": "陳統恩",
+      "team": "中信兄弟",
+      "acnt": "0000006732"
+    },
+    "KAO Yu Chieh": {
+      "zh": "高宇杰",
+      "team": "中信兄弟",
+      "acnt": "0000002285"
+    },
+    "WANG Wei Chen": {
+      "zh": "王威晨",
+      "team": "中信兄弟",
+      "acnt": "0000000929"
+    },
+    "CHANG Jen Wei": {
+      "zh": "張仁瑋",
+      "team": "中信兄弟",
+      "acnt": "0000006730"
+    },
+    "CHEN Chun Hsiu": {
+      "zh": "陳俊秀",
+      "team": "中信兄弟",
+      "acnt": "0000003609"
+    },
+    "WANG Cheng Shun": {
+      "zh": "王政順",
+      "team": "中信兄弟",
+      "acnt": "0000002307"
+    },
+    "HUANG Wei Sheng": {
+      "zh": "黃韋盛",
+      "team": "中信兄弟",
+      "acnt": "0000005298"
+    },
+    "HSU Chi Hung": {
+      "zh": "許基宏",
+      "team": "中信兄弟",
+      "acnt": "0000001119"
+    },
+    "CHIANG Kun Yu": {
+      "zh": "江坤宇",
+      "team": "中信兄弟",
+      "acnt": "0000004636"
+    },
+    "YUEH Tung Hua": {
+      "zh": "岳東華",
+      "team": "中信兄弟",
+      "acnt": "0000002291"
+    },
+    "LI Sheng Yu": {
+      "zh": "李聖裕",
+      "team": "中信兄弟",
+      "acnt": "0000005656"
+    },
+    "HSU Ting Lun": {
+      "zh": "許庭綸",
+      "team": "中信兄弟",
+      "acnt": "0000007278"
+    },
+    "CHAN Tzu Hsien": {
+      "zh": "詹子賢",
+      "team": "中信兄弟",
+      "acnt": "0000002297"
+    },
+    "SUNG Cheng Jui": {
+      "zh": "宋晟睿",
+      "team": "中信兄弟",
+      "acnt": "0000006225"
+    },
+    "YUEH Cheng Hua": {
+      "zh": "岳政華",
+      "team": "中信兄弟",
+      "acnt": "0000005571"
+    },
+    "TAKASHIO Masaki": {
+      "zh": "髙塩將樹",
+      "team": "統一7-ELEVEn獅",
+      "acnt": "0000006818"
+    },
+    "CHUNG Yun Hua": {
+      "zh": "鍾允華",
+      "team": "統一7-ELEVEn獅",
+      "acnt": "0000007293"
+    },
+    "LEE Chi Feng": {
+      "zh": "李其峰",
+      "team": "統一7-ELEVEn獅",
+      "acnt": "0000006127"
+    },
+    "CHIU Hao Chun": {
+      "zh": "邱浩鈞",
+      "team": "統一7-ELEVEn獅",
+      "acnt": "0000000998"
+    },
+    "HUANG Chun Yen": {
+      "zh": "黃竣彥",
+      "team": "統一7-ELEVEn獅",
+      "acnt": "0000002303"
+    },
+    "Jackson STEPHENS": {
+      "zh": "獅帝芬",
+      "team": "統一7-ELEVEn獅",
+      "acnt": "0000007597"
+    },
+    "ZHENG Fu Hao": {
+      "zh": "鄭副豪",
+      "team": "統一7-ELEVEn獅",
+      "acnt": "0000006850"
+    },
+    "WU Cheng Yu": {
+      "zh": "吳承諭",
+      "team": "統一7-ELEVEn獅",
+      "acnt": "0000005482"
+    },
+    "LEE Chun": {
+      "zh": "李軍",
+      "team": "統一7-ELEVEn獅",
+      "acnt": "0000007292"
+    },
+    "KAO Wei Chiang": {
+      "zh": "高偉強",
+      "team": "統一7-ELEVEn獅",
+      "acnt": "0000005315"
+    },
+    "Jordan BALAZOVIC": {
+      "zh": "喬登",
+      "team": "統一7-ELEVEn獅",
+      "acnt": "0000007778"
+    },
+    "Denyi REYES": {
+      "zh": "銳力獅",
+      "team": "統一7-ELEVEn獅",
+      "acnt": "0000006295"
+    },
+    "CHANG Hsiang": {
+      "zh": "張翔",
+      "team": "統一7-ELEVEn獅",
+      "acnt": "0000006716"
+    },
+    "WU Po Hsien": {
+      "zh": "吳柏賢",
+      "team": "統一7-ELEVEn獅",
+      "acnt": "0000007602"
+    },
+    "CHEN Chung Yu": {
+      "zh": "陳重羽",
+      "team": "統一7-ELEVEn獅",
+      "acnt": "0000002298"
+    },
+    "LIN Tzu Hao": {
+      "zh": "林子豪",
+      "team": "統一7-ELEVEn獅",
+      "acnt": "0000006223"
+    },
+    "HO Heng Yu": {
+      "zh": "何恆佑",
+      "team": "統一7-ELEVEn獅",
+      "acnt": "0000006213"
+    },
+    "LIN Pei Wei": {
+      "zh": "林培緯",
+      "team": "統一7-ELEVEn獅",
+      "acnt": "0000006851"
+    },
+    "PAN Chieh Kai": {
+      "zh": "潘傑楷",
+      "team": "統一7-ELEVEn獅",
+      "acnt": "0000002707"
+    },
+    "LIN Tzu Chieh": {
+      "zh": "林祖傑",
+      "team": "統一7-ELEVEn獅",
+      "acnt": "0000001339"
+    },
+    "CHEN Chung Ting": {
+      "zh": "陳重廷",
+      "team": "統一7-ELEVEn獅",
+      "acnt": "0000002289"
+    },
+    "LIN Hong Xian": {
+      "zh": "林泓弦",
+      "team": "統一7-ELEVEn獅",
+      "acnt": "0000007071"
+    },
+    "CHEN Sheng Ping": {
+      "zh": "陳聖平",
+      "team": "統一7-ELEVEn獅",
+      "acnt": "0000007268"
+    },
+    "LI Cheng Ling": {
+      "zh": "李丞齡",
+      "team": "統一7-ELEVEn獅",
+      "acnt": "0000004641"
+    },
+    "Chu Chia En": {
+      "zh": "朱迦恩",
+      "team": "統一7-ELEVEn獅",
+      "acnt": "0000005522"
+    },
+    "CHIU Chih Cheng": {
+      "zh": "邱智呈",
+      "team": "統一7-ELEVEn獅",
+      "acnt": "0000005531"
+    },
+    "SU Chih Chieh": {
+      "zh": "蘇智傑",
+      "team": "統一7-ELEVEn獅",
+      "acnt": "0000001474"
+    },
+    "SU Chun Chang": {
+      "zh": "蘇俊璋",
+      "team": "樂天桃猿",
+      "acnt": "0000005558"
+    },
+    "CHEN Kuan Yu": {
+      "zh": "陳冠宇",
+      "team": "樂天桃猿",
+      "acnt": "0000000941"
+    },
+    "CHU Cheng Yang": {
+      "zh": "朱承洋",
+      "team": "樂天桃猿",
+      "acnt": "0000000128"
+    },
+    "Tyler EPPLER": {
+      "zh": "艾菩樂",
+      "team": "樂天桃猿",
+      "acnt": "0000006906"
+    },
+    "ZENG Jia Hui": {
+      "zh": "曾家輝",
+      "team": "樂天桃猿",
+      "acnt": "0000007074"
+    },
+    "CHIU Chun Wei": {
+      "zh": "邱駿威",
+      "team": "樂天桃猿",
+      "acnt": "0000006720"
+    },
+    "Pedro FERNANDEZ": {
+      "zh": "威能帝",
+      "team": "樂天桃猿",
+      "acnt": "0000007062"
+    },
+    "LIN Tzu Wei": {
+      "zh": "林子偉",
+      "team": "樂天桃猿",
+      "acnt": "0000001618"
+    },
+    "LAI Yin Hao": {
+      "zh": "賴胤豪",
+      "team": "樂天桃猿",
+      "acnt": "0000007073"
+    },
+    "WANG Chih Hsuan": {
+      "zh": "王志煊",
+      "team": "樂天桃猿",
+      "acnt": "0000006228"
+    },
+    "Kyle MARMAN": {
+      "zh": "魔爾曼",
+      "team": "樂天桃猿",
+      "acnt": "0000007790"
+    },
+    "CHUANG Hsin Yen": {
+      "zh": "莊昕諺",
+      "team": "樂天桃猿",
+      "acnt": "0000005509"
+    },
+    "LU Guan Yu": {
+      "zh": "盧冠宇",
+      "team": "樂天桃猿",
+      "acnt": "0000007047"
+    },
+    "SUNG Jia Xiang": {
+      "zh": "宋嘉翔",
+      "team": "樂天桃猿",
+      "acnt": "0000006854"
+    },
+    "LIN Hung Yu": {
+      "zh": "林泓育",
+      "team": "樂天桃猿",
+      "acnt": "0000003467"
+    },
+    "YEN Hung Chun": {
+      "zh": "嚴宏鈞",
+      "team": "樂天桃猿",
+      "acnt": "0000004032"
+    },
+    "YU Te Lung": {
+      "zh": "余德龍",
+      "team": "樂天桃猿",
+      "acnt": "0000003563"
+    },
+    "TUNG Shun Chieh": {
+      "zh": "董順傑",
+      "team": "樂天桃猿",
+      "acnt": "0000006856"
+    },
+    "TSENG Kuan Chieh": {
+      "zh": "曾冠傑",
+      "team": "樂天桃猿",
+      "acnt": "0000007313"
+    },
+    "LIU Zi Jie": {
+      "zh": "劉子杰",
+      "team": "樂天桃猿",
+      "acnt": "0000007018"
+    },
+    "LIN Chih Ping": {
+      "zh": "林智平",
+      "team": "樂天桃猿",
+      "acnt": "0000003345"
+    },
+    "HSU He Chieh": {
+      "zh": "許賀捷",
+      "team": "樂天桃猿",
+      "acnt": "0000007589"
+    },
+    "MA Chieh Sen": {
+      "zh": "馬傑森",
+      "team": "樂天桃猿",
+      "acnt": "0000006240"
+    },
+    "LEE Hsun Chieh": {
+      "zh": "李勛傑",
+      "team": "樂天桃猿",
+      "acnt": "0000007076"
+    },
+    "CHENG Chin": {
+      "zh": "成晉",
+      "team": "樂天桃猿",
+      "acnt": "0000000159"
+    },
+    "HO Pin Shih Jung": {
+      "zh": "何品室融",
+      "team": "樂天桃猿",
+      "acnt": "0000007288"
+    },
+    "CHEN Chen Wei": {
+      "zh": "陳晨威",
+      "team": "樂天桃猿",
+      "acnt": "0000004633"
+    },
+    "CHEN Ping Hong": {
+      "zh": "陳品宏",
+      "team": "富邦悍將",
+      "acnt": "0000007299"
+    },
+    "LIAO Jen Lei": {
+      "zh": "廖任磊",
+      "team": "富邦悍將",
+      "acnt": "0000002280"
+    },
+    "LEE Chien Hsun": {
+      "zh": "李建勳",
+      "team": "富邦悍將",
+      "acnt": "0000005561"
+    },
+    "CHANG Yi": {
+      "zh": "張奕",
+      "team": "富邦悍將",
+      "acnt": "0000005790"
+    },
+    "SHIH Tzu Lin": {
+      "zh": "石梓霖",
+      "team": "富邦悍將",
+      "acnt": "0000007593"
+    },
+    "LAI  Hung Cheng": {
+      "zh": "賴鴻誠",
+      "team": "富邦悍將",
+      "acnt": "0000003292"
+    },
+    "LI WU Yung Qin": {
+      "zh": "李吳永勤",
+      "team": "富邦悍將",
+      "acnt": "0000000773"
+    },
+    "Shawn MORIMANDO": {
+      "zh": "魔力藍",
+      "team": "富邦悍將",
+      "acnt": "0000006749"
+    },
+    "TSENG Jyun Yue": {
+      "zh": "曾峻岳",
+      "team": "富邦悍將",
+      "acnt": "0000006227"
+    },
+    "LI Tung Ming": {
+      "zh": "李東洺",
+      "team": "富邦悍將",
+      "acnt": "0000006739"
+    },
+    "SUZUKI Shunsuke": {
+      "zh": "鈴木駿輔",
+      "team": "富邦悍將",
+      "acnt": "0000007228"
+    },
+    "YU Ting Wei": {
+      "zh": "游霆崴",
+      "team": "富邦悍將",
+      "acnt": "0000000368"
+    },
+    "LIN Zhen Cheng": {
+      "zh": "林栚呈",
+      "team": "富邦悍將",
+      "acnt": "0000006870"
+    },
+    "CHANG Chin Te": {
+      "zh": "張進德",
+      "team": "富邦悍將",
+      "acnt": "0000000910"
+    },
+    "DAI Pei Feng": {
+      "zh": "戴培峰",
+      "team": "富邦悍將",
+      "acnt": "0000004645"
+    },
+    "WANG Sheng Wei（Haro Ngayaw）": {
+      "zh": "王勝偉",
+      "team": "富邦悍將",
+      "acnt": "0000003211"
+    },
+    "WANG Nian Hao": {
+      "zh": "王念好",
+      "team": "富邦悍將",
+      "acnt": "0000007089"
+    },
+    "YEH Tzu Ting": {
+      "zh": "葉子霆",
+      "team": "富邦悍將",
+      "acnt": "0000006229"
+    },
+    "LEE  Tsung Hsien": {
+      "zh": "李宗賢",
+      "team": "富邦悍將",
+      "acnt": "0000001473"
+    },
+    "FAN  Kuo Chen": {
+      "zh": "范國宸",
+      "team": "富邦悍將",
+      "acnt": "0000002352"
+    },
+    "LIN Yue Ku": {
+      "zh": "林岳谷",
+      "team": "富邦悍將",
+      "acnt": "0000006872"
+    },
+    "LIU Chun Hao": {
+      "zh": "劉俊豪",
+      "team": "富邦悍將",
+      "acnt": "0000006743"
+    },
+    "CHANG Yu Cheng": {
+      "zh": "張育成",
+      "team": "富邦悍將",
+      "acnt": "0000006888"
+    },
+    "Luis LIBERATO": {
+      "zh": "邦力多",
+      "team": "富邦悍將",
+      "acnt": "0000006063"
+    },
+    "CHANG Ming Yu": {
+      "zh": "張洺瑀",
+      "team": "富邦悍將",
+      "acnt": "0000000361"
+    },
+    "CHOU Chia Le": {
+      "zh": "周佳樂",
+      "team": "富邦悍將",
+      "acnt": "0000006868"
+    },
+    "KUNG Nien En": {
+      "zh": "孔念恩",
+      "team": "富邦悍將",
+      "acnt": "0000006738"
+    },
+    "LI Chao": {
+      "zh": "李超",
+      "team": "味全龍",
+      "acnt": "0000006160"
+    },
+    "Marcelo MARTINEZ": {
+      "zh": "魔神龍",
+      "team": "味全龍",
+      "acnt": "0000007264"
+    },
+    "Huang Wei Chieh": {
+      "zh": "黃暐傑",
+      "team": "味全龍",
+      "acnt": "0000007581"
+    },
+    "Andrew GAGNON": {
+      "zh": "鋼龍",
+      "team": "味全龍",
+      "acnt": "0000006497"
+    },
+    "LU Wei Cheng": {
+      "zh": "呂偉晟",
+      "team": "味全龍",
+      "acnt": "0000005552"
+    },
+    "Bryan WOODALL": {
+      "zh": "伍鐸",
+      "team": "味全龍",
+      "acnt": "0000000762"
+    },
+    "WANG Bo Yang": {
+      "zh": "王伯洋",
+      "team": "味全龍",
+      "acnt": "0000006910"
+    },
+    "CHEN Kuan Wei": {
+      "zh": "陳冠偉",
+      "team": "味全龍",
+      "acnt": "0000005555"
+    },
+    "LIN Tzu Yu": {
+      "zh": "林子昱",
+      "team": "味全龍",
+      "acnt": "0000001821"
+    },
+    "LIN Hsin Jie": {
+      "zh": "林鋅杰",
+      "team": "味全龍",
+      "acnt": "0000005789"
+    },
+    "WU Jun Yi": {
+      "zh": "吳君奕",
+      "team": "味全龍",
+      "acnt": "0000006878"
+    },
+    "Cristopher MERCEDES": {
+      "zh": "梅賽鍶",
+      "team": "味全龍",
+      "acnt": "0000006555"
+    },
+    "LIN Kai Wei": {
+      "zh": "林凱威",
+      "team": "味全龍",
+      "acnt": "0000005788"
+    },
+    "LIN Chen Hsun": {
+      "zh": "林辰勳",
+      "team": "味全龍",
+      "acnt": "0000006217"
+    },
+    "JIANG Shao Hong": {
+      "zh": "蔣少宏",
+      "team": "味全龍",
+      "acnt": "0000005291"
+    },
+    "CHU Yu Hsien": {
+      "zh": "朱育賢",
+      "team": "味全龍",
+      "acnt": "0000001318"
+    },
+    "LI Kai Wei": {
+      "zh": "李凱威",
+      "team": "味全龍",
+      "acnt": "0000005540"
+    },
+    "LIU Jun Wei": {
+      "zh": "劉俊緯",
+      "team": "味全龍",
+      "acnt": "0000007079"
+    },
+    "CHANG Cheng Yu": {
+      "zh": "張政禹",
+      "team": "味全龍",
+      "acnt": "0000005542"
+    },
+    "LI Chan I": {
+      "zh": "李展毅",
+      "team": "味全龍",
+      "acnt": "0000006726"
+    },
+    "LIU Ji Hong": {
+      "zh": "劉基鴻",
+      "team": "味全龍",
+      "acnt": "0000005545"
+    },
+    "SHIH Hsiang Yu": {
+      "zh": "石翔宇",
+      "team": "味全龍",
+      "acnt": "0000000356"
+    },
+    "CHEN Tzu Hao": {
+      "zh": "陳子豪",
+      "team": "味全龍",
+      "acnt": "0000000743"
+    },
+    "KUO Tian Shin": {
+      "zh": "郭天信",
+      "team": "味全龍",
+      "acnt": "0000005549"
+    },
+    "WANG Shun Ho": {
+      "zh": "王順和",
+      "team": "味全龍",
+      "acnt": "0000006216"
+    },
+    "CHANG Yu Ming": {
+      "zh": "張祐銘",
+      "team": "味全龍",
+      "acnt": "0000005553"
+    },
+    "ZENG Shen AN": {
+      "zh": "曾聖安",
+      "team": "味全龍",
+      "acnt": "0000007304"
+    },
+    "JAN Hao Lin": {
+      "zh": "冉皓燐",
+      "team": "味全龍",
+      "acnt": "0000006879"
+    },
+    "LIN Shi Xiang": {
+      "zh": "林詩翔",
+      "team": "台鋼雄鷹",
+      "acnt": "0000006949"
+    },
+    "CHEN Yu Hung": {
+      "zh": "陳宇宏",
+      "team": "台鋼雄鷹",
+      "acnt": "0000006833"
+    },
+    "LEE Hsin Yin": {
+      "zh": "李欣穎",
+      "team": "台鋼雄鷹",
+      "acnt": "0000006918"
+    },
+    "SHIH Tzu Chien": {
+      "zh": "施子謙",
+      "team": "台鋼雄鷹",
+      "acnt": "0000002348"
+    },
+    "LAI Chih Yuan": {
+      "zh": "賴智垣",
+      "team": "台鋼雄鷹",
+      "acnt": "0000002272"
+    },
+    "Bradin HAGENS": {
+      "zh": "後勁",
+      "team": "台鋼雄鷹",
+      "acnt": "0000006507"
+    },
+    "WANG Yao Lin": {
+      "zh": "王躍霖",
+      "team": "台鋼雄鷹",
+      "acnt": "0000001390"
+    },
+    "CHEN Po Ching": {
+      "zh": "陳柏清",
+      "team": "台鋼雄鷹",
+      "acnt": "0000006832"
+    },
+    "HUANG Tzu Peng": {
+      "zh": "黃子鵬",
+      "team": "台鋼雄鷹",
+      "acnt": "0000002274"
+    },
+    "HSU Yu Ming": {
+      "zh": "許育銘",
+      "team": "台鋼雄鷹",
+      "acnt": "0000006767"
+    },
+    "HSU Chun Yang": {
+      "zh": "許峻暘",
+      "team": "台鋼雄鷹",
+      "acnt": "0000005285"
+    },
+    "David BUCHANAN": {
+      "zh": "坎南",
+      "team": "台鋼雄鷹",
+      "acnt": "0000007570"
+    },
+    "CHEN Shih Chia": {
+      "zh": "陳世嘉",
+      "team": "台鋼雄鷹",
+      "acnt": "0000007064"
+    },
+    "WU Po Hsuan": {
+      "zh": "吳柏萱",
+      "team": "台鋼雄鷹",
+      "acnt": "0000006938"
+    },
+    "CHEN Jhih Jia": {
+      "zh": "陳致嘉",
+      "team": "台鋼雄鷹",
+      "acnt": "0000006926"
+    },
+    "TSENG Tzu Yu": {
+      "zh": "曾子祐",
+      "team": "台鋼雄鷹",
+      "acnt": "0000006927"
+    },
+    "YEN Yu Hsuan": {
+      "zh": "顏郁軒",
+      "team": "台鋼雄鷹",
+      "acnt": "0000006939"
+    },
+    "KUO Yung Wei": {
+      "zh": "郭永維",
+      "team": "台鋼雄鷹",
+      "acnt": "0000003174"
+    },
+    "LIN Jia Hong": {
+      "zh": "林家鋐",
+      "team": "台鋼雄鷹",
+      "acnt": "0000006928"
+    },
+    "WU Nien Ting": {
+      "zh": "吳念庭",
+      "team": "台鋼雄鷹",
+      "acnt": "0000003649"
+    },
+    "TSENG Yu Ching": {
+      "zh": "曾昱磬",
+      "team": "台鋼雄鷹",
+      "acnt": "0000007301"
+    },
+    "KUO Fu Lin": {
+      "zh": "郭阜林",
+      "team": "台鋼雄鷹",
+      "acnt": "0000001291"
+    },
+    "Steven MOYA": {
+      "zh": "魔鷹",
+      "team": "台鋼雄鷹",
+      "acnt": "0000007239"
+    },
+    "TUNG Ping Hsuan": {
+      "zh": "董秉軒",
+      "team": "台鋼雄鷹",
+      "acnt": "0000005296"
+    },
+    "CHEN Wun Jie": {
+      "zh": "陳文杰",
+      "team": "台鋼雄鷹",
+      "acnt": "0000000772"
+    },
+    "WANG Po Jung": {
+      "zh": "王柏融",
+      "team": "台鋼雄鷹",
+      "acnt": "0000000935"
+    },
+    "JI Qing Ran": {
+      "zh": "紀慶然",
+      "team": "台鋼雄鷹",
+      "acnt": "0000006929"
+    },
+    "GAO Sheng En": {
+      "zh": "高聖恩",
+      "team": "台鋼雄鷹",
+      "acnt": "0000006936"
+    }
+  }
+}
