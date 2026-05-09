@@ -783,6 +783,25 @@ async def send_pending_notifications():
     return {"notified": notified}
 
 
+def _minimal_boxscore_from_game(game: dict) -> dict:
+    """Build a stripped-down boxscore from a game's final scores.
+
+    Used when cpbl_boxscore.scrape_boxscore is unreachable (geo-block).
+    Only carries scores + team names + margin; settlement uses the
+    `_minimal` flag to know per-inning / HR / pitcher fields are absent.
+    """
+    h = int(game.get("home_score", 0) or 0)
+    a = int(game.get("away_score", 0) or 0)
+    return {
+        "home_score": h,
+        "away_score": a,
+        "winning_margin": abs(h - a),
+        "home_team_name": game.get("home_team_name", ""),
+        "away_team_name": game.get("away_team_name", ""),
+        "_minimal": True,
+    }
+
+
 async def midnight_settle():
     """00:00 - Scrape today's results + boxscores and settle all bets."""
     from app.scraper.cpbl_boxscore import scrape_boxscore
@@ -807,16 +826,28 @@ async def midnight_settle():
         game_sno = game.get("game_sno")
         if not game_sno:
             continue
+        bs = None
         try:
             time.sleep(random.uniform(1, 2))
             bs = await scrape_boxscore(game_sno)
-            if bs:
-                boxscores[game["id"]] = bs
-                # Persist for weekly awards aggregation
-                game_repo.upsert_game(game["id"], {"boxscore": bs})
-                logger.info(f"[00:00] Boxscore {game['id']}: {bs.get('away_score',0)}-{bs.get('home_score',0)}, HR:{bs.get('total_hr',0)}, 1st:{bs.get('first_inning_runs',0)}")
         except Exception as e:
             logger.warning(f"[00:00] Boxscore failed for {game['id']}: {e}")
+
+        if bs:
+            boxscores[game["id"]] = bs
+            # Persist for weekly awards aggregation
+            game_repo.upsert_game(game["id"], {"boxscore": bs})
+            logger.info(f"[00:00] Boxscore {game['id']}: {bs.get('away_score',0)}-{bs.get('home_score',0)}, HR:{bs.get('total_hr',0)}, 1st:{bs.get('first_inning_runs',0)}")
+        else:
+            # cpbl_boxscore goes through www.cpbl.com.tw/box, which is
+            # path-level geo-blocked from non-TW datacenter ASNs (same root
+            # cause as the schedule scrape). Fall back to a stripped-down
+            # box derived from the schedule's final scores so at least
+            # moneyline / win_margin / team_runs can settle. The minimal
+            # box is marked _minimal=True so settlement skips bet types
+            # that need real per-inning / HR / pitcher data.
+            boxscores[game["id"]] = _minimal_boxscore_from_game(game)
+            logger.info(f"[00:00] Boxscore {game['id']}: minimal fallback (scrape unavailable)")
 
     logger.info(f"[00:00] Got {len(boxscores)} boxscores")
 

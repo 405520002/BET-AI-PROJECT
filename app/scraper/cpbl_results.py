@@ -1,26 +1,33 @@
-"""Scrape CPBL game results - reuses schedule API since it includes scores."""
+"""Game results for a given date.
+
+Sources from today.line.me. The previous implementation went through
+cpbl_schedule.scrape_schedule_for_date, which hits www.cpbl.com.tw/box/*
+— that path is HiNet-CDN geo-blocked from non-TW datacenter ASNs and
+returns 404 from the GCP us-west1 VM, so the 00:00 settlement job was
+silently seeing zero finals every night and leaving every bet pending.
+"""
 from __future__ import annotations
 
 import logging
-from datetime import date
 
-from app.scraper.cpbl_schedule import scrape_schedule_for_date
+from app.scraper.line_today_schedule import fetch_line_today_schedule
 
 logger = logging.getLogger(__name__)
 
 
 async def scrape_game_results(target_date: str) -> list[dict]:
-    """Get game results for a given date.
-    Returns list of dicts with: game_sno, home_score, away_score, status.
+    """Return finished + postponed games for `target_date` (YYYY-MM-DD).
+
+    Output items: {game_sno, home_score, away_score, status, result_details}.
     """
-    parts = target_date.split("-")
-    year, month, day = int(parts[0]), int(parts[1]), int(parts[2])
+    games = await fetch_line_today_schedule()
 
-    games = await scrape_schedule_for_date(year, month, day)
-
-    results = []
+    results: list[dict] = []
     for g in games:
-        if g["status"] == "final":
+        if g.get("date") != target_date:
+            continue
+        status = g.get("status")
+        if status == "final":
             results.append({
                 "game_sno": g["game_sno"],
                 "home_score": g.get("home_score", 0),
@@ -28,7 +35,7 @@ async def scrape_game_results(target_date: str) -> list[dict]:
                 "status": "final",
                 "result_details": {},
             })
-        elif g["status"] == "postponed":
+        elif status == "postponed":
             results.append({
                 "game_sno": g["game_sno"],
                 "home_score": 0,

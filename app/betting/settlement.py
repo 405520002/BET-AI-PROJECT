@@ -141,20 +141,32 @@ RULE_TYPES = {"moneyline", "over_under", "spread", "first_inning", "total_hr",
 
 
 def _can_rule_settle(bet: dict, game: dict, boxscore: dict | None) -> bool:
-    """Check if this bet can be settled with rules."""
+    """Check if this bet can be settled with rules.
+
+    A `_minimal=True` boxscore (built from final scores when cpbl_boxscore
+    is unreachable) only carries scores + margin; bet types needing
+    per-inning / HR / pitcher / hit data must wait for a real box.
+    """
     bet_type = bet.get("bet_type", "")
+    is_minimal_box = bool(boxscore and boxscore.get("_minimal"))
 
     # These always work with just scores
     if bet_type in ("moneyline", "over_under", "spread"):
         return True
 
-    # These need boxscore
-    if bet_type in ("first_inning", "total_hr", "win_margin", "pitcher_k",
-                    "pitcher_er", "team_hits", "team_runs"):
+    # win_margin / team_runs only need final scores → minimal box is enough.
+    if bet_type in ("win_margin", "team_runs"):
         return boxscore is not None
 
-    # Legacy custom type - try to match by market_name keywords
-    if bet_type == "custom" and boxscore:
+    # These need real per-inning / HR / pitcher / hit stats from a full box.
+    if bet_type in ("first_inning", "total_hr", "pitcher_k",
+                    "pitcher_er", "team_hits"):
+        return boxscore is not None and not is_minimal_box
+
+    # Legacy custom type - try to match by market_name keywords. The keyword
+    # routes go through _eval_* helpers that depend on boxscore stats not in
+    # a minimal box, so require a full one here.
+    if bet_type == "custom" and boxscore and not is_minimal_box:
         market_name = bet.get("market_name", "")
         if "首局" in market_name:
             return True
