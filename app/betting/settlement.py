@@ -266,7 +266,7 @@ def _rule_evaluate(bet: dict, game: dict, boxscore: dict | None) -> tuple[str, i
             return _eval_team_hits(selection, odds, amount, boxscore, game)
 
         if bet_type == "team_runs" or (bet_type == "custom" and "得分" in bet.get("market_name", "")):
-            return _eval_team_runs(selection, odds, amount, boxscore, game)
+            return _eval_team_runs(selection, odds, amount, boxscore, game, bet.get("market_name", ""))
 
     return ("lost", 0, "")
 
@@ -447,14 +447,21 @@ def _eval_team_hits(selection, odds, amount, bs, game):
     return ("lost", 0, reason)
 
 
-def _eval_team_runs(selection, odds, amount, bs, game):
-    """Evaluate single team runs over/under."""
+def _eval_team_runs(selection, odds, amount, bs, game, market_name=""):
+    """Evaluate single team runs over/under.
+
+    The team is sometimes encoded in selection ("味全龍得分小於 4.5") and
+    sometimes only in market_name ("中信兄弟單隊總得分大小") with the
+    selection just being "小於 4.5". Look in both before falling back to
+    treating the bet as total-runs.
+    """
     home_name = game.get("home_team_name", "")
     away_name = game.get("away_team_name", "")
+    text = f"{selection} {market_name}"
 
-    if home_name and home_name in selection:
+    if home_name and home_name in text:
         actual = bs.get("home_score", 0)
-    elif away_name and away_name in selection:
+    elif away_name and away_name in text:
         actual = bs.get("away_score", 0)
     else:
         actual = bs.get("home_score", 0) + bs.get("away_score", 0)
