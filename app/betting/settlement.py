@@ -59,8 +59,12 @@ def settle_game(game_id: str, boxscore: dict | None = None) -> dict:
         if outcome == "won":
             total_payout += payout
 
-    # AI settlement for custom bets (and rule-failed bets)
-    if ai_bets and boxscore:
+    # AI settlement for custom bets (and rule-failed bets). Skip when the
+    # box is the _minimal fallback — it carries scores only, no play-by-play
+    # / pitcher / HR detail, and the LLM hallucinates outcomes (saw a 6:0
+    # blowout once and decided the winner "從未領先"). Better to leave such
+    # bets pending until /box becomes reachable.
+    if ai_bets and boxscore and not boxscore.get("_minimal"):
         ai_results = _ai_evaluate_bets(ai_bets, game, boxscore)
         for bet, result_tuple in zip(ai_bets, ai_results):
             outcome, payout, reason = result_tuple
